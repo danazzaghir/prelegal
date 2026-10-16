@@ -1,6 +1,6 @@
 # Manual test plan: Mutual NDA Creator
 
-Run these before releasing changes to the NDA creator. Automated coverage is listed for each, so these focus on what a person needs to look at: layout, print output and real browser behaviour.
+Run these before releasing changes to the NDA creator. The automated tests (`npm test`, `npm run test:e2e`) cover the logic and main flows; these checks focus on what a person needs to look at: layout, print output and real browser behaviour.
 
 Start the app with `npm run dev` (or `npm run build && npm run start`) and open http://localhost:3000.
 
