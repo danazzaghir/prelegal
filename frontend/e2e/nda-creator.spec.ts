@@ -35,7 +35,7 @@ test.describe("Mutual NDA creator", () => {
       if (msg.type() === "error") consoleErrors.push(msg.text());
     });
     page.on("pageerror", (err) => consoleErrors.push(err.message));
-    await page.goto("/");
+    await page.goto("/nda/");
   });
 
   test.afterEach(() => {
@@ -55,7 +55,7 @@ test.describe("Mutual NDA creator", () => {
   });
 
   test("offers only a PDF download", async ({ page }) => {
-    await expect(page.getByRole("button")).toHaveCount(1);
+    await expect(page.getByRole("button")).toHaveText(["Sign out", "Download PDF"]);
     await expect(page.getByRole("button", { name: "Download PDF" })).toBeVisible();
     await expect(page.getByText(/markdown/i)).toHaveCount(0);
   });

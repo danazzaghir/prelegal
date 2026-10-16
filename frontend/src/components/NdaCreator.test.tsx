@@ -5,6 +5,8 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import NdaCreator from "./NdaCreator";
 
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+
 const standardTerms = fs.readFileSync(
   path.join(__dirname, "..", "..", "..", "templates", "Mutual-NDA.md"),
   "utf-8",
@@ -44,12 +46,11 @@ describe("NdaCreator", () => {
   });
 
   describe("initial state", () => {
-    it("shows the title and a single download button", () => {
+    it("shows the title, a single download button and sign out", () => {
       setup();
       expect(screen.getByRole("heading", { level: 1, name: /Mutual NDA Creator/ })).toBeInTheDocument();
-      const buttons = screen.getAllByRole("button");
-      expect(buttons).toHaveLength(1);
-      expect(buttons[0]).toHaveTextContent("Download PDF");
+      const buttons = screen.getAllByRole("button").map((b) => b.textContent);
+      expect(buttons).toEqual(["Sign out", "Download PDF"]);
     });
 
     it("does not offer a Markdown download", () => {

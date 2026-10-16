@@ -5,9 +5,10 @@ import type { NextConfig } from "next";
 const repoRoot = path.join(__dirname, "..");
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  cacheComponents: true,
-  partialPrefetching: true,
+  // Built as static files that the FastAPI backend serves (see backend/).
+  // Trailing slashes emit nda/index.html, which a static file server resolves.
+  output: "export",
+  trailingSlash: true,
   outputFileTracingRoot: repoRoot,
   turbopack: {
     root: repoRoot,
