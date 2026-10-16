@@ -1,12 +1,26 @@
-# Manual test plan: Mutual NDA Creator
+# Manual test plan: Prelegal frontend
 
 Run these before releasing changes to the NDA creator. The automated tests (`npm test`, `npm run test:e2e`) cover the logic and main flows; these checks focus on what a person needs to look at: layout, print output and real browser behaviour.
 
-Start the app with `npm run dev` (or `npm run build && npm run start`) and open http://localhost:3000.
+Start the app with `npm run dev` and open http://localhost:3000, or run the production setup with the start script for your OS in `scripts/` and open http://localhost:8000.
+
+### Login (PL-4)
 
 | # | Area | Steps | Expected result |
 |---|------|-------|-----------------|
-| 1 | First load | Open the page | Form on the left, agreement on the right (stacked on phones). Effective date is today. Only one button: **Download PDF**. No Markdown download. |
+| L1 | Login screen | Open the site | Prelegal login screen with Email, Password and a purple **Sign in** button, and a note that any email and password will do. |
+| L2 | Sign in | Enter any email and password, press **Sign in** (and once with Enter) | You land on the Mutual NDA Creator at `/nda/`; your email shows in the header. |
+| L3 | Validation | Press **Sign in** with empty fields, then with `abc` as the email | The browser asks you to fill in the fields / enter a valid email; you stay on the login screen. |
+| L4 | Sign out | Press **Sign out** | Back on the login screen. Opening `/nda/` again shows no email in the header. |
+| L5 | Docker | Run the start script for your OS, then the stop script | Start prints "Prelegal is running at http://localhost:8000" and the site works there; stop prints "Prelegal stopped." and the site is gone. |
+
+### Mutual NDA Creator (PL-3)
+
+Open `/nda/` (sign in first, or go there directly).
+
+| # | Area | Steps | Expected result |
+|---|------|-------|-----------------|
+| 1 | First load | Open the page | Form on the left, agreement on the right (stacked on phones). Effective date is today. Buttons: **Sign out** and **Download PDF**. No Markdown download. |
 | 2 | Live preview | Type in each field of the form | The matching part of the agreement updates as you type. |
 | 3 | Parties | Fill in all four fields for Party 1 and Party 2 | Values appear in the correct column of the signature table. A two-line notice address shows on one line, separated by a comma. |
 | 4 | Blanks | Clear Purpose, Effective date, Governing law and Jurisdiction | Each shows a blank line `________________` to fill in by hand, not a horizontal rule. The date stays blank (does not jump back to today). |
@@ -20,7 +34,15 @@ Start the app with `npm run dev` (or `npm run build && npm run start`) and open 
 | 12 | Keyboard | Tab through the form; use arrow keys on the radio buttons | Every control can be reached and has a visible focus ring; radio groups switch with arrow keys. |
 | 13 | Console | Open browser dev tools while using the page in `npm run dev` | No errors or hydration warnings. |
 
-## Last run
+## Last run (PL-4)
+
+16 October 2026, by Claude Code on the `feature/PL-4-v1-foundation` branch:
+
+- Done by inspecting screenshots of the build served by FastAPI (Chromium, desktop 1400px and Pixel 7): L1, L2, 1.
+- Covered by automated tests: L2, L3, L4 (Playwright and component tests).
+- L5 not run: Docker is not installed on the machine used. The start and stop scripts were run against a stub `docker` command and the real backend, which checked their argument handling, health polling and failure path, but not the image build itself.
+
+## Previous run (PL-3)
 
 16 October 2026, by Claude Code on the `feature/PL-3-mnda-creator` branch:
 

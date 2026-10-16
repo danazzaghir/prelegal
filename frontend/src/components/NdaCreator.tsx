@@ -3,6 +3,7 @@
 import { useState, useSyncExternalStore } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import UserMenu from "@/components/UserMenu";
 import { buildNdaMarkdown, defaultNdaData, parseYears, type NdaData, type Party } from "@/lib/nda";
 
 const inputClass =
@@ -87,15 +88,18 @@ export default function NdaCreator({ standardTerms }: { standardTerms: string })
       <header className="border-b border-slate-200 bg-white print:hidden">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-4">
           <div>
-            <h1 className="text-xl font-semibold text-slate-900">Prelegal · Mutual NDA Creator</h1>
+            <h1 className="text-xl font-semibold text-[#032147]">Prelegal · Mutual NDA Creator</h1>
             <p className="text-sm text-slate-500">Fill in the key terms, review the agreement, then download it.</p>
           </div>
-          <button
-            onClick={() => window.print()}
-            className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
-          >
-            Download PDF
-          </button>
+          <div className="flex flex-wrap items-center gap-4">
+            <UserMenu />
+            <button
+              onClick={() => window.print()}
+              className="rounded-md bg-[#209dd7] px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-[#1a86b8]"
+            >
+              Download PDF
+            </button>
+          </div>
         </div>
       </header>
 
