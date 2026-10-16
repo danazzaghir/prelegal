@@ -18,6 +18,7 @@ body {
   font-size: 0.95rem;
   line-height: 1.6;
   color: #0f172a;
+  overflow-wrap: anywhere;
 }
 .nda-document h1 {
   font-size: 1.6rem;
@@ -60,8 +61,14 @@ body {
 }
 .nda-document table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   margin: 1rem 0;
+}
+/* Label column, then two equal party columns */
+.nda-document th:first-child,
+.nda-document td:first-child {
+  width: 28%;
 }
 .nda-document th,
 .nda-document td {
@@ -71,6 +78,24 @@ body {
 }
 .nda-document td {
   height: 2.5rem;
+  hyphens: auto;
+}
+/* Row labels ("Signature", "Company") should never break mid-word */
+.nda-document td:first-child {
+  overflow-wrap: normal;
+}
+@media (max-width: 640px) {
+  .nda-document table {
+    font-size: 0.8rem;
+  }
+  .nda-document th,
+  .nda-document td {
+    padding: 0.4rem 0.5rem;
+  }
+  .nda-document th:first-child,
+  .nda-document td:first-child {
+    width: 32%;
+  }
 }
 
 @media print {

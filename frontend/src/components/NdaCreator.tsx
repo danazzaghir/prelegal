@@ -3,7 +3,7 @@
 import { useState, useSyncExternalStore } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { buildNdaMarkdown, defaultNdaData, type NdaData, type Party } from "@/lib/nda";
+import { buildNdaMarkdown, defaultNdaData, parseYears, type NdaData, type Party } from "@/lib/nda";
 
 const inputClass =
   "w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500";
@@ -20,7 +20,7 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <fieldset className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
+    <fieldset className="min-w-0 space-y-4 rounded-lg border border-slate-200 bg-white p-4">
       <legend className="px-1 text-sm font-semibold uppercase tracking-wide text-slate-600">{title}</legend>
       {children}
     </fieldset>
@@ -35,13 +35,22 @@ function todayIso(): string {
 
 const noopSubscribe = () => () => {};
 
+// Email addresses typed into the form are auto-linked by GFM; in an agreement
+// they should read as plain text.
+function DocumentLink({ href, children }: React.ComponentProps<"a">) {
+  if (!href || href.startsWith("mailto:")) return <>{children}</>;
+  return <a href={href}>{children}</a>;
+}
+
 export default function NdaCreator({ standardTerms }: { standardTerms: string }) {
   const [formData, setData] = useState<NdaData>(() => defaultNdaData(""));
+  // null until the user edits the date; an empty string means they cleared it.
+  const [chosenDate, setChosenDate] = useState<string | null>(null);
 
   // The page is prerendered, so today's date is only known in the browser.
   // Until the user picks a date, the effective date defaults to today.
   const today = useSyncExternalStore(noopSubscribe, todayIso, () => "");
-  const data = formData.effectiveDate ? formData : { ...formData, effectiveDate: today };
+  const data = { ...formData, effectiveDate: chosenDate ?? today };
 
   const markdown = buildNdaMarkdown(data, standardTerms);
 
@@ -50,16 +59,6 @@ export default function NdaCreator({ standardTerms }: { standardTerms: string })
 
   const updateParty = (which: "party1" | "party2", key: keyof Party, value: string) =>
     setData((d) => ({ ...d, [which]: { ...d[which], [key]: value } }));
-
-  const downloadMarkdown = () => {
-    const blob = new Blob([markdown], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "Mutual-NDA.md";
-    a.click();
-    URL.revokeObjectURL(url);
-  };
 
   const partyFields = (which: "party1" | "party2", title: string) => (
     <Section title={title}>
@@ -91,38 +90,32 @@ export default function NdaCreator({ standardTerms }: { standardTerms: string })
             <h1 className="text-xl font-semibold text-slate-900">Prelegal · Mutual NDA Creator</h1>
             <p className="text-sm text-slate-500">Fill in the key terms, review the agreement, then download it.</p>
           </div>
-          <div className="flex gap-2">
-            <button
-              onClick={downloadMarkdown}
-              className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-800 shadow-sm hover:bg-slate-50"
-            >
-              Download Markdown
-            </button>
-            <button
-              onClick={() => window.print()}
-              className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
-            >
-              Download PDF
-            </button>
-          </div>
+          <button
+            onClick={() => window.print()}
+            className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
+          >
+            Download PDF
+          </button>
         </div>
       </header>
 
-      <main className="mx-auto grid max-w-7xl gap-6 px-4 py-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] print:block print:p-0">
+      <main className="mx-auto grid max-w-7xl grid-cols-1 gap-6 px-4 py-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] print:block print:p-0">
         <form className="space-y-4 print:hidden" onSubmit={(e) => e.preventDefault()}>
           <Section title="Agreement">
             <Field label="Purpose" hint="How Confidential Information may be used">
               <textarea className={inputClass} rows={3} value={data.purpose} onChange={(e) => update("purpose", e.target.value)} />
             </Field>
             <Field label="Effective date">
-              <input type="date" className={inputClass} value={data.effectiveDate} onChange={(e) => update("effectiveDate", e.target.value)} />
+              <input type="date" className={inputClass} value={data.effectiveDate} onChange={(e) => setChosenDate(e.target.value)} />
             </Field>
           </Section>
 
           <Section title="MNDA term">
-            <label className="flex items-center gap-2 text-sm text-slate-800">
+            <label className="flex flex-wrap items-center gap-2 text-sm text-slate-800">
               <input
                 type="radio"
+                name="mndaTerm"
+                aria-label="Expires after a number of years"
                 checked={data.mndaTermType === "expires"}
                 onChange={() => update("mndaTermType", "expires")}
               />
@@ -131,15 +124,18 @@ export default function NdaCreator({ standardTerms }: { standardTerms: string })
                 type="number"
                 min={1}
                 className={`${inputClass} !w-20 shrink-0`}
-                value={data.mndaTermYears}
+                aria-label="MNDA term in years"
+                value={data.mndaTermYears || ""}
                 disabled={data.mndaTermType !== "expires"}
-                onChange={(e) => update("mndaTermYears", Math.max(1, Number(e.target.value) || 1))}
+                onChange={(e) => update("mndaTermYears", parseYears(e.target.value))}
               />
               year(s) from Effective Date
             </label>
-            <label className="flex items-center gap-2 text-sm text-slate-800">
+            <label className="flex flex-wrap items-center gap-2 text-sm text-slate-800">
               <input
                 type="radio"
+                name="mndaTerm"
+                aria-label="Continues until terminated"
                 checked={data.mndaTermType === "untilTerminated"}
                 onChange={() => update("mndaTermType", "untilTerminated")}
               />
@@ -148,9 +144,11 @@ export default function NdaCreator({ standardTerms }: { standardTerms: string })
           </Section>
 
           <Section title="Term of confidentiality">
-            <label className="flex items-center gap-2 text-sm text-slate-800">
+            <label className="flex flex-wrap items-center gap-2 text-sm text-slate-800">
               <input
                 type="radio"
+                name="confidentialityTerm"
+                aria-label="Protected for a number of years"
                 checked={data.confidentialityTermType === "years"}
                 onChange={() => update("confidentialityTermType", "years")}
               />
@@ -158,15 +156,18 @@ export default function NdaCreator({ standardTerms }: { standardTerms: string })
                 type="number"
                 min={1}
                 className={`${inputClass} !w-20 shrink-0`}
-                value={data.confidentialityTermYears}
+                aria-label="Term of confidentiality in years"
+                value={data.confidentialityTermYears || ""}
                 disabled={data.confidentialityTermType !== "years"}
-                onChange={(e) => update("confidentialityTermYears", Math.max(1, Number(e.target.value) || 1))}
+                onChange={(e) => update("confidentialityTermYears", parseYears(e.target.value))}
               />
               year(s) from Effective Date
             </label>
-            <label className="flex items-center gap-2 text-sm text-slate-800">
+            <label className="flex flex-wrap items-center gap-2 text-sm text-slate-800">
               <input
                 type="radio"
+                name="confidentialityTerm"
+                aria-label="In perpetuity"
                 checked={data.confidentialityTermType === "perpetuity"}
                 onChange={() => update("confidentialityTermType", "perpetuity")}
               />
@@ -193,8 +194,10 @@ export default function NdaCreator({ standardTerms }: { standardTerms: string })
           {partyFields("party2", "Party 2")}
         </form>
 
-        <article className="nda-document rounded-lg border border-slate-200 bg-white px-8 py-10 shadow-sm lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto print:static print:max-h-none print:overflow-visible print:border-0 print:p-0 print:shadow-none">
-          <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
+        <article className="nda-document rounded-lg border border-slate-200 bg-white px-5 py-8 shadow-sm sm:px-8 sm:py-10 lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto print:static print:max-h-none print:overflow-visible print:border-0 print:p-0 print:shadow-none">
+          <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ a: DocumentLink }}>
+            {markdown}
+          </ReactMarkdown>
         </article>
       </main>
 

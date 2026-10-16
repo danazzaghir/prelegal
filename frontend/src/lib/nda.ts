@@ -9,9 +9,9 @@ export type NdaData = {
   purpose: string;
   effectiveDate: string; // YYYY-MM-DD
   mndaTermType: "expires" | "untilTerminated";
-  mndaTermYears: number;
+  mndaTermYears: number; // 0 when not filled in
   confidentialityTermType: "years" | "perpetuity";
-  confidentialityTermYears: number;
+  confidentialityTermYears: number; // 0 when not filled in
   governingLaw: string;
   jurisdiction: string;
   modifications: string;
@@ -47,7 +47,18 @@ export function formatDate(isoDate: string): string {
   });
 }
 
+/** Parses a years input; 0 means the field is empty or invalid. */
+export function parseYears(value: string): number {
+  const n = Number.parseInt(value, 10);
+  return Number.isFinite(n) && n >= 1 ? n : 0;
+}
+
+// Underscores are escaped: a line of bare underscores is a Markdown horizontal rule.
+const BLANK = "\\_".repeat(16);
+const SHORT_BLANK = "\\_".repeat(4);
+
 function years(n: number): string {
+  if (n < 1) return `${SHORT_BLANK} year(s)`;
   return `${n} year${n === 1 ? "" : "s"}`;
 }
 
@@ -68,7 +79,7 @@ export function stripTemplateMarkup(markdown: string): string {
   return markdown.replace(/<span[^>]*>(.*?)<\/span>/g, "$1");
 }
 
-const blank = (value: string) => value.trim() || "________________";
+const blank = (value: string) => value.trim() || BLANK;
 
 // Keeps user input from breaking the markdown table it is placed in.
 const cell = (value: string) =>
