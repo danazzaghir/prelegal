@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-serif: Georgia, "Times New Roman", serif;
+}
+
+body {
+  background: #f1f5f9;
+  color: #0f172a;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+}
+
+/* Typography for the rendered agreement */
+.nda-document {
+  font-family: var(--font-serif);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: #0f172a;
+}
+.nda-document h1 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+.nda-document h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 1.5rem 0 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.nda-document h1 + h2 {
+  margin-top: 0;
+}
+.nda-document h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 1.1rem 0 0.25rem;
+}
+.nda-document p {
+  margin: 0.5rem 0;
+}
+.nda-document ol {
+  list-style: decimal;
+  padding-left: 1.5rem;
+}
+.nda-document li {
+  margin: 0.6rem 0;
+}
+.nda-document a {
+  color: #4338ca;
+  text-decoration: underline;
+}
+.nda-document hr {
+  margin: 2rem 0;
+  border-color: #cbd5e1;
+}
+.nda-document table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+}
+.nda-document th,
+.nda-document td {
+  border: 1px solid #cbd5e1;
+  padding: 0.5rem 0.75rem;
+  vertical-align: top;
+}
+.nda-document td {
+  height: 2.5rem;
+}
+
+@media print {
+  @page {
+    margin: 2cm;
+  }
+  body {
+    background: #fff;
+  }
+  /* Start the Standard Terms on a new page */
+  .nda-document hr {
+    break-after: page;
+    border: 0;
+    margin: 0;
+  }
+  .nda-document table {
+    break-inside: avoid;
+  }
+}
