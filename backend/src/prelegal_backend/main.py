@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager, closing
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.staticfiles import StaticFiles
 
+from prelegal_backend.chat import router as chat_router
 from prelegal_backend.config import Settings
 from prelegal_backend.database import connect, init_db
 
@@ -23,6 +24,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         with closing(connect(request.app.state.settings.database_path)) as conn:
             conn.execute("SELECT COUNT(*) FROM users").fetchone()
         return {"status": "ok", "database": "ok"}
+
+    app.include_router(chat_router)
 
     # Unknown API paths get a JSON 404 rather than the frontend's 404 page.
     @app.api_route("/api/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"], include_in_schema=False)
