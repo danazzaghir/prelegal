@@ -38,7 +38,6 @@ Passwords are hashed with scrypt (Python's standard library). Signing up or in s
 | `TEMPLATES_DIR` | `templates` | `/app/templates` |
 | `CATALOG_PATH` | `catalog.json` | `/app/catalog.json` |
 | `OPENROUTER_API_KEY` | read from the repo's `.env` | passed in with `--env-file .env` |
-| `ANTHROPIC_API_KEY` | optional; read from the repo's `.env` | passed in with `--env-file .env` |
 
 ## Documents
 
@@ -52,5 +51,4 @@ Passwords are hashed with scrypt (Python's standard library). Signing up or in s
 - When the AI chooses or switches document, the backend asks again straight away with that document in the prompt, so details the user already gave are filled in.
 - Every response includes a follow-on question, which is appended to the reply.
 - Updates for other documents' terms, unknown term names and empty values are dropped.
-- Each call has a 30 second time limit and is retried once, except when the account is out of credit.
-- If the OpenRouter call fails (for example, out of credit) and `ANTHROPIC_API_KEY` is set, the same prompt goes to Claude Haiku 5.5 through Anthropic's Python SDK, with structured outputs for the same `ChatTurn` response (`src/prelegal_backend/claude_fallback.py`). With only `ANTHROPIC_API_KEY` set, Claude is used for every turn. Replies are capped at 2,000 tokens (a reply needs a few hundred).
+- Each call has a 30 second time limit and is retried once, except when the account is out of credit. Replies are capped at 2,000 tokens (a reply needs a few hundred).

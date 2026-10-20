@@ -40,7 +40,7 @@ Prelegal runs as a single Docker container: the FastAPI backend serves the API a
 
 1. Install [Docker](https://docs.docker.com/get-docker/) and start it.
 2. Clone this repository.
-3. Create a `.env` file in the repo root containing `OPENROUTER_API_KEY=<your key>`. The AI chat needs it ([get a key from OpenRouter](https://openrouter.ai/keys)). Optionally add `ANTHROPIC_API_KEY=<your key>` too ([get one from Anthropic](https://console.anthropic.com/settings/keys)): if OpenRouter can't answer, for example when its credit runs out, the chat uses Claude instead. The file is passed into the container and never committed.
+3. Create a `.env` file in the repo root containing `OPENROUTER_API_KEY=<your key>`. The AI chat needs it ([get a key from OpenRouter](https://openrouter.ai/keys)). The file is passed into the container and never committed.
 4. From the repo root, run the start script for your OS:
 
 | OS | Start | Stop |

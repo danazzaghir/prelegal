@@ -12,7 +12,6 @@ from collections.abc import Callable
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from prelegal_backend.auth import SignedIn
-from prelegal_backend.claude_fallback import call_claude, claude_available
 from prelegal_backend.documents import NDA_ID, Document
 from prelegal_backend.models import ChatRequest, ChatTurn, Draft, Party
 from prelegal_backend.prompts import build_messages
@@ -92,26 +91,11 @@ def is_out_of_credit(error: Exception) -> bool:
     return getattr(error, "status_code", None) == 402
 
 
-def call_with_fallback(messages: list[dict[str, str]]) -> ChatTurn:
-    """OpenRouter first; Claude if that fails and an Anthropic key is set."""
-    if not os.environ.get("OPENROUTER_API_KEY"):
-        return call_claude(messages)
-    try:
-        return call_llm(messages)
-    except Exception:
-        if not claude_available():
-            raise
-        logger.warning("OpenRouter call failed; using Claude instead", exc_info=True)
-        return call_claude(messages)
-
-
 def get_llm() -> LlmCall:
     """The AI call, as a dependency so tests can replace it."""
-    if not os.environ.get("OPENROUTER_API_KEY") and not claude_available():
-        raise HTTPException(
-            status_code=503, detail="AI chat is not set up: OPENROUTER_API_KEY (or ANTHROPIC_API_KEY) is missing."
-        )
-    return call_with_fallback
+    if not os.environ.get("OPENROUTER_API_KEY"):
+        raise HTTPException(status_code=503, detail="AI chat is not set up: OPENROUTER_API_KEY is missing.")
+    return call_llm
 
 
 def run_turn(body: ChatRequest, documents: dict[str, Document], llm: LlmCall) -> ChatTurn:
