@@ -8,7 +8,9 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 
 
-if docker rm -f prelegal >/dev/null 2>&1; then
+# docker rm -f succeeds even when there is no container, so check first.
+if [ -n "$(docker ps -aq --filter name=^prelegal$)" ]; then
+  docker rm -f prelegal >/dev/null
   echo "Prelegal stopped."
 else
   echo "Prelegal is not running."
