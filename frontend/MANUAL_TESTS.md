@@ -14,27 +14,37 @@ Start the app with `npm run dev` and open http://localhost:3000, or run the prod
 | L4 | Sign out | Press **Sign out** | Back on the login screen. Opening `/nda/` again shows no email in the header. |
 | L5 | Docker | Run the start script for your OS, then the stop script | Start prints "Prelegal is running at http://localhost:8000" and the site works there; stop prints "Prelegal stopped." and the site is gone. |
 
-### Mutual NDA Creator (PL-3)
+### Mutual NDA Creator with AI chat (PL-3, PL-5)
 
-Open `/nda/` (sign in first, or go there directly).
+Open `/nda/` (sign in first, or go there directly). The chat needs `OPENROUTER_API_KEY` in the repo's `.env`.
 
 | # | Area | Steps | Expected result |
 |---|------|-------|-----------------|
-| 1 | First load | Open the page | Form on the left, agreement on the right (stacked on phones). Effective date is today. Buttons: **Sign out** and **Download PDF**. No Markdown download. |
-| 2 | Live preview | Type in each field of the form | The matching part of the agreement updates as you type. |
-| 3 | Parties | Fill in all four fields for Party 1 and Party 2 | Values appear in the correct column of the signature table. A two-line notice address shows on one line, separated by a comma. |
-| 4 | Blanks | Clear Purpose, Effective date, Governing law and Jurisdiction | Each shows a blank line `________________` to fill in by hand, not a horizontal rule. The date stays blank (does not jump back to today). |
-| 5 | MNDA term | Change years to 3; clear the box and type 2; select "Continues until terminated"; switch back | "Expires 3 years…", then "Expires 2 years…" (no "12"). The years box is disabled while "Continues until terminated" is selected and keeps its value when switching back. |
-| 6 | Confidentiality term | Set years to 5, then select "In perpetuity" | "5 years from Effective Date, but in the case of trade secrets…", then "In perpetuity." with the years box disabled. |
-| 7 | Modifications | Leave empty, then type a modification | "None." when empty; the typed text otherwise. |
-| 8 | Unsafe input | Type `<b>bold</b>` and `[x](javascript:alert(1))` into Purpose and Modifications | Shown as text; nothing is bolded and no clickable javascript link appears. |
-| 9 | Emails | Enter an email as a notice address | Shown as plain text in the table, not as a blue link. |
-| 10 | Download PDF | Click **Download PDF**, choose "Save as PDF", open the file | Only the agreement is included (no form, header or footer). Cover page first; Standard Terms start on a new page; the signature table is not split across pages. All 11 sections and the CC BY 4.0 attribution are present. |
-| 11 | Phone layout | Open on a phone or a 375px-wide window | No sideways scrolling. Form fields are full width. Signature table labels ("Signature", "Company") do not break mid-word. |
-| 12 | Keyboard | Tab through the form; use arrow keys on the radio buttons | Every control can be reached and has a visible focus ring; radio groups switch with arrow keys. |
-| 13 | Console | Open browser dev tools while using the page in `npm run dev` | No errors or hydration warnings. |
+| 1 | First load | Open the page | Chat on the left, agreement on the right (stacked on phones). The assistant's greeting asks who the two parties are. Effective date is today. Buttons: **Sign out**, **Download PDF** and a purple **Send**. No Markdown download. |
+| 2 | Parties | Give both parties in one message: company, signer, title and email for each | After the reply, the values appear in the correct columns of the signature table, and the assistant asks about what is still missing. |
+| 3 | Step by step | Answer the assistant's questions one at a time (governing law, jurisdiction, terms) | Each answer shows up in the agreement. Earlier answers stay. The assistant asks at most two questions at a time and does not invent names, companies or addresses. |
+| 4 | Changes | Ask it to "make the NDA continue until terminated", "protect confidential information forever" and "start on March 5 next year" | MNDA Term reads "Continues until terminated…", Term of Confidentiality reads "In perpetuity.", Effective Date reads March 5 of next year. |
+| 5 | Defaults | Before the end, check what the assistant says about the purpose and 1-year terms | It mentions the defaults once and asks if they are fine, instead of asking about each. When everything is filled in, it says the agreement is ready and points to **Download PDF**. |
+| 6 | Chat controls | Press Enter to send; Shift+Enter for a new line; try to send an empty message | Enter sends and clears the box; Shift+Enter adds a line; an empty message is not sent (Send is disabled). While waiting, "Thinking…" shows and Send is disabled. |
+| 7 | AI unavailable | Stop the app's internet access, or remove `OPENROUTER_API_KEY` and restart, then send a message | A red error message appears in the chat; your message goes back into the box so you can resend it; the agreement does not change. |
+| 8 | Replies | Look at a reply that has a list | Lists and bold text are formatted; your own messages show exactly as typed. |
+| 9 | Unsafe input | Ask the assistant to set the purpose to `<b>bold</b>` and the modifications to `[x](javascript:alert(1))` | Shown as text in the agreement; nothing is bolded and no clickable javascript link appears. |
+| 10 | Emails and addresses | Give an email and a two-line postal address as notice addresses | The email shows as plain text, not a blue link. The two-line address shows on one row, separated by a comma. |
+| 11 | Download PDF | Click **Download PDF**, choose "Save as PDF", open the file | Only the agreement is included (no chat, header or footer). Cover page first; Standard Terms start on a new page; the signature table is not split across pages. All 11 sections and the CC BY 4.0 attribution are present. |
+| 12 | Phone layout | Open on a phone or a 375px-wide window | No sideways scrolling. The chat is a fixed-height box above the agreement and scrolls to the newest message. |
+| 13 | Keyboard | Tab through the page | The message box, Send, Sign out and Download PDF can be reached and have a visible focus ring. |
+| 14 | Console | Open browser dev tools while chatting in `npm run dev` | No errors or hydration warnings. |
 
-## Last run (PL-4)
+## Last run (PL-5)
+
+20 October 2026, by Claude Code on the `feature/PL-5-ai-chat` branch:
+
+- Done by inspecting screenshots after a live AI conversation, on the build served by FastAPI (Chromium, desktop 1400px and Pixel 7): 1, 2, 12 (no sideways scrolling on either).
+- Covered by automated tests: 2, 3 (no invented details), 4 (live AI browser tests, passed 12 of 12 repeated runs); 6, 7, 8, 9, 10 (component and browser tests); 11 (print layout and a generated PDF).
+- Checked by hand: `npm run dev` sends `/api/chat` to the backend; the Docker image builds and the chat works inside it with `.env` passed in.
+- Not yet done by a person: 5 (the assistant's wording about defaults), 11 (open the saved PDF and look at it), 13 (keyboard), and testing in Safari and Firefox.
+
+## Previous run (PL-4)
 
 16 October 2026, by Claude Code on the `feature/PL-4-v1-foundation` branch:
 

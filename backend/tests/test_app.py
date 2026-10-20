@@ -1,3 +1,4 @@
+import os
 from contextlib import closing
 
 from fastapi.testclient import TestClient
@@ -101,3 +102,25 @@ def test_unknown_api_routes_are_404s_for_every_method(client):
         response = client.request(method, "/api/no-such-route")
         assert response.status_code == 404, method
         assert response.json() == {"detail": "Not Found"}
+
+
+def test_settings_load_secrets_from_the_repo_env_file(monkeypatch, tmp_path):
+    from prelegal_backend import config
+
+    (tmp_path / ".env").write_text("OPENROUTER_API_KEY=from-dotenv\n")
+    monkeypatch.setattr(config, "REPO_DIR", tmp_path)
+    # setenv first so monkeypatch restores the original state after the test.
+    monkeypatch.setenv("OPENROUTER_API_KEY", "")
+    monkeypatch.delenv("OPENROUTER_API_KEY")
+    Settings.from_env()
+    assert os.environ["OPENROUTER_API_KEY"] == "from-dotenv"
+
+
+def test_settings_do_not_override_real_environment_variables(monkeypatch, tmp_path):
+    from prelegal_backend import config
+
+    (tmp_path / ".env").write_text("OPENROUTER_API_KEY=from-dotenv\n")
+    monkeypatch.setattr(config, "REPO_DIR", tmp_path)
+    monkeypatch.setenv("OPENROUTER_API_KEY", "from-environment")
+    Settings.from_env()
+    assert os.environ["OPENROUTER_API_KEY"] == "from-environment"

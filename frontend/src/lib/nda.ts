@@ -37,6 +37,13 @@ export function defaultNdaData(today: string): NdaData {
   };
 }
 
+/** Today's date in the browser's time zone, as YYYY-MM-DD. */
+export function todayIso(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 export function formatDate(isoDate: string): string {
   if (!isoDate) return "";
   const [y, m, d] = isoDate.split("-").map(Number);
@@ -45,12 +52,6 @@ export function formatDate(isoDate: string): string {
     month: "long",
     day: "numeric",
   });
-}
-
-/** Parses a years input; 0 means the field is empty or invalid. */
-export function parseYears(value: string): number {
-  const n = Number.parseInt(value, 10);
-  return Number.isFinite(n) && n >= 1 ? n : 0;
 }
 
 // Underscores are escaped: a line of bare underscores is a Markdown horizontal rule.

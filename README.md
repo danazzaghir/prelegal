@@ -8,11 +8,11 @@ Prelegal fills in [Common Paper](https://commonpaper.com) standard agreements wi
 
 Early development. Today Prelegal has:
 
-- **Mutual NDA Creator**: fill in the key terms in a form, see the Common Paper Mutual NDA update live, and download it as a PDF.
+- **Mutual NDA Creator with AI chat**: describe your agreement in a chat. The assistant asks about the parties and terms, fills in the Common Paper Mutual NDA as you answer, and you download it as a PDF.
 - **Sign-in screen (placeholder)**: any email and password take you into the platform. Real accounts are planned.
 - **Foundation for v1**: FastAPI backend, SQLite database, Docker packaging and start/stop scripts.
 
-Planned: AI chat to choose and fill in agreements, the rest of the templates, real sign up and sign in, and saved documents.
+Planned: the rest of the templates in the AI chat, real sign up and sign in, and saved documents.
 
 ## Supported agreements
 
@@ -38,7 +38,7 @@ Prelegal runs as a single Docker container: the FastAPI backend serves the API a
 
 1. Install [Docker](https://docs.docker.com/get-docker/) and start it.
 2. Clone this repository.
-3. Optional: create a `.env` file in the repo root for secrets (for example `OPENROUTER_API_KEY`, needed by the upcoming AI features). It is passed into the container and never committed.
+3. Create a `.env` file in the repo root containing `OPENROUTER_API_KEY=<your key>`. The AI chat needs it ([get a key from OpenRouter](https://openrouter.ai/keys)). The file is passed into the container and never committed.
 4. From the repo root, run the start script for your OS:
 
 | OS | Start | Stop |
@@ -52,7 +52,7 @@ The start script builds the image, starts the container and waits until it is re
 ## Usage
 
 1. Open http://localhost:8000 and sign in with any email and password.
-2. In the Mutual NDA Creator, fill in the purpose, effective date, terms, governing law and both parties. The agreement on the right updates as you type; blank fields show a line to fill in by hand.
+2. In the Mutual NDA Creator, chat with the assistant: tell it who the parties are, which state's law applies, and any terms you want to change. The agreement on the right updates after each answer; fields still blank show a line to fill in by hand. Press Enter to send, Shift+Enter for a new line.
 3. Click **Download PDF** and choose "Save as PDF" in the print dialog. The PDF has only the agreement: the cover page, then the Standard Terms on a new page.
 4. Click **Sign out** when you are done.
 
@@ -74,7 +74,9 @@ You need Node.js 24 and [uv](https://docs.astral.sh/uv/).
 # Frontend with hot reload at http://localhost:3000
 cd frontend && npm install && npm run dev
 
-# Backend at http://localhost:8000, serving the last frontend build
+# Backend at http://localhost:8000, serving the last frontend build.
+# It reads OPENROUTER_API_KEY from the repo's .env. `npm run dev` sends /api calls
+# here; set BACKEND_URL to use another address.
 cd frontend && npm run build
 cd ../backend && uv run prelegal-backend
 ```
@@ -86,6 +88,8 @@ cd backend && uv run pytest        # backend
 cd frontend && npm test            # frontend unit and component tests
 cd frontend && npm run test:e2e    # browser tests (run `npx playwright install chromium` once)
 ```
+
+The browser tests include a few conversations with the real AI model, so they need `OPENROUTER_API_KEY` in `.env` and use a small amount of API credit.
 
 ## Contributing
 

@@ -7,7 +7,6 @@ import {
   defaultNdaData,
   formatDate,
   mndaTermText,
-  parseYears,
   stripTemplateMarkup,
   type NdaData,
 } from "./nda";
@@ -77,25 +76,6 @@ describe("formatDate", () => {
 
   it("returns an empty string for an empty date", () => {
     expect(formatDate("")).toBe("");
-  });
-});
-
-describe("parseYears", () => {
-  it.each([
-    ["1", 1],
-    ["3", 3],
-    ["10", 10],
-    ["007", 7],
-  ])("parses %j as %i", (input, expected) => {
-    expect(parseYears(input)).toBe(expected);
-  });
-
-  it.each(["", "0", "-2", "abc", " "])("treats %j as not filled in", (input) => {
-    expect(parseYears(input)).toBe(0);
-  });
-
-  it("drops a fractional part", () => {
-    expect(parseYears("2.7")).toBe(2);
   });
 });
 

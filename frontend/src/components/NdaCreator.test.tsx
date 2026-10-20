@@ -3,6 +3,7 @@ import path from "node:path";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fakeChatApi, requestBody, type UpdateChanges } from "@/test-utils/fakeChat";
 import NdaCreator from "./NdaCreator";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
@@ -19,6 +20,18 @@ function setup() {
   return { user, preview };
 }
 
+/** Sends a chat message and waits for the AI's (fake) reply. */
+async function say(user: ReturnType<typeof userEvent.setup>, text: string, reply = "Got it.") {
+  await user.type(screen.getByLabelText("Message"), `${text}{Enter}`);
+  await screen.findByText(reply);
+}
+
+/** Sends one message whose fake AI reply makes the given updates. */
+async function chatUpdates(user: ReturnType<typeof userEvent.setup>, changes: UpdateChanges) {
+  fakeChatApi({ reply: "Got it.", updates: changes });
+  await say(user, "Here are the details");
+}
+
 /** Text of the paragraph that follows a cover page heading in the preview. */
 function sectionText(preview: HTMLElement, heading: string): string {
   const h = within(preview).getByRole("heading", { level: 3, name: heading });
@@ -32,8 +45,6 @@ function signatureRow(preview: HTMLElement, label: string): string[] {
     .map((c) => c.textContent ?? "");
 }
 
-const party = (n: 1 | 2) => within(screen.getByRole("group", { name: `Party ${n}` }));
-
 describe("NdaCreator", () => {
   beforeEach(() => {
     // Only fake Date so userEvent's timers still run.
@@ -43,34 +54,22 @@ describe("NdaCreator", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   describe("initial state", () => {
-    it("shows the title, a single download button and sign out", () => {
+    it("shows the title, sign out, download and the chat's send button", () => {
       setup();
       expect(screen.getByRole("heading", { level: 1, name: /Mutual NDA Creator/ })).toBeInTheDocument();
       const buttons = screen.getAllByRole("button").map((b) => b.textContent);
-      expect(buttons).toEqual(["Sign out", "Download PDF"]);
+      expect(buttons).toEqual(["Sign out", "Download PDF", "Send"]);
     });
 
-    it("does not offer a Markdown download", () => {
+    it("replaces the old form with the chat", () => {
       setup();
-      expect(screen.queryByRole("button", { name: /markdown/i })).not.toBeInTheDocument();
-      expect(screen.queryByText(/download markdown/i)).not.toBeInTheDocument();
-    });
-
-    it("pre-fills the form with the defaults", () => {
-      setup();
-      expect(screen.getByLabelText(/^Purpose/)).toHaveValue(
-        "Evaluating whether to enter into a business relationship with the other party.",
-      );
-      expect(screen.getByLabelText("Effective date")).toHaveValue("2026-10-16");
-      expect(screen.getByLabelText("Expires after a number of years")).toBeChecked();
-      expect(screen.getByLabelText("MNDA term in years")).toHaveValue(1);
-      expect(screen.getByLabelText("Protected for a number of years")).toBeChecked();
-      expect(screen.getByLabelText("Term of confidentiality in years")).toHaveValue(1);
-      expect(screen.getByLabelText(/^Governing law/)).toHaveValue("");
-      expect(screen.getByLabelText(/^Jurisdiction/)).toHaveValue("");
+      expect(screen.getByRole("region", { name: "Chat with the Prelegal assistant" })).toBeInTheDocument();
+      expect(screen.queryByLabelText(/^Purpose/)).not.toBeInTheDocument();
+      expect(screen.queryByRole("group", { name: "Party 1" })).not.toBeInTheDocument();
     });
 
     it("previews the cover page with defaults and blanks", () => {
@@ -103,64 +102,34 @@ describe("NdaCreator", () => {
         expect(link).toHaveAttribute("href", "https://creativecommons.org/licenses/by/4.0/");
       }
     });
+
+    it("keeps the link to the Common Paper standard", () => {
+      const { preview } = setup();
+      expect(within(preview).getByRole("link", { name: "commonpaper.com/standards/mutual-nda/1.0" })).toHaveAttribute(
+        "href",
+        "https://commonpaper.com/standards/mutual-nda/1.0",
+      );
+    });
   });
 
-  describe("live preview", () => {
-    it("updates the purpose as the user types", async () => {
-      const { user, preview } = setup();
-      const purpose = screen.getByLabelText(/^Purpose/);
-      await user.clear(purpose);
-      await user.type(purpose, "Discussing an acquisition.");
-      expect(sectionText(preview, "Purpose")).toBe("Discussing an acquisition.");
-    });
-
-    it("shows a blank when the purpose is cleared", async () => {
-      const { user, preview } = setup();
-      await user.clear(screen.getByLabelText(/^Purpose/));
-      expect(sectionText(preview, "Purpose")).toBe("________________");
-    });
-
-    it("updates the effective date", async () => {
-      const { user, preview } = setup();
-      const date = screen.getByLabelText("Effective date");
-      await user.clear(date);
-      await user.type(date, "2027-03-05");
-      expect(sectionText(preview, "Effective Date")).toBe("March 5, 2027");
-    });
-
-    it("leaves the effective date blank when the user clears it", async () => {
-      const { user, preview } = setup();
-      const date = screen.getByLabelText("Effective date");
-      await user.clear(date);
-      expect(date).toHaveValue("");
-      expect(sectionText(preview, "Effective Date")).toBe("________________");
-    });
-
-    it("fills in governing law and jurisdiction", async () => {
-      const { user, preview } = setup();
-      await user.type(screen.getByLabelText(/^Governing law/), "Delaware");
-      await user.type(screen.getByLabelText(/^Jurisdiction/), "New Castle, DE");
-      expect(within(preview).getByText("Governing Law: Delaware")).toBeInTheDocument();
-      expect(within(preview).getByText("Jurisdiction: New Castle, DE")).toBeInTheDocument();
-    });
-
-    it("shows modifications", async () => {
-      const { user, preview } = setup();
-      await user.type(screen.getByLabelText(/^MNDA modifications/), "Section 10 does not apply.");
-      expect(sectionText(preview, "MNDA Modifications")).toBe("Section 10 does not apply.");
+  describe("chat fills in the document", () => {
+    it("sends the current fields and today's date with the conversation", async () => {
+      const fetchMock = fakeChatApi({ reply: "Got it." });
+      const { user } = setup();
+      await say(user, "Acme and Globex");
+      const body = requestBody(fetchMock);
+      expect(body.today).toBe("2026-10-16");
+      expect(body.fields.effectiveDate).toBe("2026-10-16");
+      expect(body.fields.purpose).toMatch(/^Evaluating whether/);
+      expect(body.messages.at(-1)).toEqual({ role: "user", content: "Acme and Globex" });
     });
 
     it("fills in both parties in the signature table", async () => {
       const { user, preview } = setup();
-      await user.type(party(1).getByLabelText("Print name"), "Ada Lovelace");
-      await user.type(party(1).getByLabelText("Title"), "CEO");
-      await user.type(party(1).getByLabelText("Company"), "Analytical Ltd");
-      await user.type(party(1).getByLabelText(/^Notice address/), "ada@analytical.example");
-      await user.type(party(2).getByLabelText("Print name"), "Alan Turing");
-      await user.type(party(2).getByLabelText("Title"), "CTO");
-      await user.type(party(2).getByLabelText("Company"), "Enigma Inc");
-      await user.type(party(2).getByLabelText(/^Notice address/), "alan@enigma.example");
-
+      await chatUpdates(user, {
+        party1: { name: "Ada Lovelace", title: "CEO", company: "Analytical Ltd", noticeAddress: "ada@analytical.example" },
+        party2: { name: "Alan Turing", title: "CTO", company: "Enigma Inc", noticeAddress: "alan@enigma.example" },
+      });
       expect(signatureRow(preview, "Print Name")).toEqual(["Print Name", "Ada Lovelace", "Alan Turing"]);
       expect(signatureRow(preview, "Title")).toEqual(["Title", "CEO", "CTO"]);
       expect(signatureRow(preview, "Company")).toEqual(["Company", "Analytical Ltd", "Enigma Inc"]);
@@ -171,120 +140,90 @@ describe("NdaCreator", () => {
       ]);
     });
 
-    it("keeps the two parties independent", async () => {
+    it("fills in purpose, date, law, jurisdiction and modifications", async () => {
       const { user, preview } = setup();
-      await user.type(party(2).getByLabelText("Company"), "Only Party Two");
-      expect(party(1).getByLabelText("Company")).toHaveValue("");
-      expect(signatureRow(preview, "Company")).toEqual(["Company", "", "Only Party Two"]);
+      await chatUpdates(user, {
+        purpose: "Discussing an acquisition.",
+        effectiveDate: "2027-03-05",
+        governingLaw: "Delaware",
+        jurisdiction: "New Castle, DE",
+        modifications: "Section 10 does not apply.",
+      });
+      expect(sectionText(preview, "Purpose")).toBe("Discussing an acquisition.");
+      expect(sectionText(preview, "Effective Date")).toBe("March 5, 2027");
+      expect(within(preview).getByText("Governing Law: Delaware")).toBeInTheDocument();
+      expect(within(preview).getByText("Jurisdiction: New Castle, DE")).toBeInTheDocument();
+      expect(sectionText(preview, "MNDA Modifications")).toBe("Section 10 does not apply.");
     });
 
+    it("changes the term options", async () => {
+      const { user, preview } = setup();
+      await chatUpdates(user, { mndaTermType: "untilTerminated", confidentialityTermYears: 5 });
+      expect(sectionText(preview, "MNDA Term")).toBe("Continues until terminated in accordance with the terms of the MNDA.");
+      expect(sectionText(preview, "Term of Confidentiality")).toMatch(/^5 years from Effective Date, but in the case of trade secrets/);
+    });
+
+    it("keeps earlier answers when later replies change other fields", async () => {
+      const { user, preview } = setup();
+      fakeChatApi(
+        { reply: "Who is the other party?", updates: { party1: { company: "Acme Inc" } } },
+        { reply: "Which state's law?", updates: { party2: { company: "Globex LLC" } } },
+      );
+      await say(user, "Acme Inc", "Who is the other party?");
+      await say(user, "Globex LLC", "Which state's law?");
+      expect(signatureRow(preview, "Company")).toEqual(["Company", "Acme Inc", "Globex LLC"]);
+    });
+
+    it("leaves the document unchanged when the AI call fails", async () => {
+      fakeChatApi({ status: 502, detail: "The AI assistant didn't respond. Please try again." });
+      const { user, preview } = setup();
+      const before = preview.textContent;
+      await user.type(screen.getByLabelText("Message"), "Acme Inc{Enter}");
+      expect(await screen.findByRole("alert")).toHaveTextContent("didn't respond");
+      expect(preview.textContent).toBe(before);
+    });
+  });
+
+  describe("document formatting", () => {
     it("puts a multi-line address on one row", async () => {
       const { user, preview } = setup();
-      await user.type(party(1).getByLabelText(/^Notice address/), "1 Main St{Enter}Springfield, IL");
+      await chatUpdates(user, { party1: { noticeAddress: "1 Main St\nSpringfield, IL" } });
       expect(signatureRow(preview, "Notice Address")[1]).toBe("1 Main St, Springfield, IL");
     });
 
     it("shows email addresses as plain text, not links", async () => {
       const { user, preview } = setup();
-      await user.type(party(1).getByLabelText(/^Notice address/), "ada@analytical.example");
+      await chatUpdates(user, { party1: { noticeAddress: "ada@analytical.example" } });
       expect(signatureRow(preview, "Notice Address")[1]).toBe("ada@analytical.example");
-      expect(within(preview).queryByRole("link", { name: "ada@analytical.example" })).not.toBeInTheDocument();
       expect(preview.querySelector('a[href^="mailto:"]')).toBeNull();
-    });
-
-    it("keeps the link to the Common Paper standard", () => {
-      const { preview } = setup();
-      expect(within(preview).getByRole("link", { name: "commonpaper.com/standards/mutual-nda/1.0" })).toHaveAttribute(
-        "href",
-        "https://commonpaper.com/standards/mutual-nda/1.0",
-      );
     });
 
     it("does not let a pipe character break the signature table", async () => {
       const { user, preview } = setup();
-      await user.type(party(1).getByLabelText("Print name"), "A | B");
+      await chatUpdates(user, { party1: { name: "A | B" } });
       expect(signatureRow(preview, "Print Name")).toEqual(["Print Name", "A | B", ""]);
     });
-  });
 
-  describe("term options", () => {
-    it("changes the MNDA term length", async () => {
+    it("keeps a filled-in field when the AI sends an empty value", async () => {
       const { user, preview } = setup();
-      const years = screen.getByLabelText("MNDA term in years");
-      await user.clear(years);
-      await user.type(years, "3");
-      expect(years).toHaveValue(3);
-      expect(sectionText(preview, "MNDA Term")).toBe("Expires 3 years from Effective Date.");
-    });
-
-    it("lets the user clear the years before typing a new number", async () => {
-      const { user, preview } = setup();
-      const years = screen.getByLabelText("MNDA term in years");
-      await user.clear(years);
-      expect(years).toHaveValue(null);
-      expect(sectionText(preview, "MNDA Term")).toBe("Expires ____ year(s) from Effective Date.");
-      await user.type(years, "2");
-      expect(years).toHaveValue(2);
-    });
-
-    it("switches the MNDA to continue until terminated and disables the years", async () => {
-      const { user, preview } = setup();
-      await user.click(screen.getByLabelText("Continues until terminated"));
-      expect(screen.getByLabelText("Continues until terminated")).toBeChecked();
-      expect(screen.getByLabelText("Expires after a number of years")).not.toBeChecked();
-      expect(screen.getByLabelText("MNDA term in years")).toBeDisabled();
-      expect(sectionText(preview, "MNDA Term")).toBe(
-        "Continues until terminated in accordance with the terms of the MNDA.",
+      await chatUpdates(user, { purpose: "" });
+      expect(sectionText(preview, "Purpose")).toBe(
+        "Evaluating whether to enter into a business relationship with the other party.",
       );
-    });
-
-    it("switches back to a fixed MNDA term and keeps the years", async () => {
-      const { user, preview } = setup();
-      const years = screen.getByLabelText("MNDA term in years");
-      await user.clear(years);
-      await user.type(years, "4");
-      await user.click(screen.getByLabelText("Continues until terminated"));
-      await user.click(screen.getByLabelText("Expires after a number of years"));
-      expect(years).toBeEnabled();
-      expect(sectionText(preview, "MNDA Term")).toBe("Expires 4 years from Effective Date.");
-    });
-
-    it("changes the confidentiality term length", async () => {
-      const { user, preview } = setup();
-      const years = screen.getByLabelText("Term of confidentiality in years");
-      await user.clear(years);
-      await user.type(years, "5");
-      expect(sectionText(preview, "Term of Confidentiality")).toMatch(/^5 years from Effective Date, but in the case of trade secrets/);
-    });
-
-    it("switches confidentiality to perpetuity and disables the years", async () => {
-      const { user, preview } = setup();
-      await user.click(screen.getByLabelText("In perpetuity"));
-      expect(screen.getByLabelText("Term of confidentiality in years")).toBeDisabled();
-      expect(sectionText(preview, "Term of Confidentiality")).toBe("In perpetuity.");
-    });
-
-    it("keeps the two term settings independent", async () => {
-      const { user, preview } = setup();
-      await user.click(screen.getByLabelText("In perpetuity"));
-      expect(screen.getByLabelText("Expires after a number of years")).toBeChecked();
-      expect(sectionText(preview, "MNDA Term")).toBe("Expires 1 year from Effective Date.");
     });
   });
 
   describe("safety", () => {
-    it("shows HTML typed into the form as text instead of rendering it", async () => {
+    it("shows HTML from the AI's field values as text instead of rendering it", async () => {
       const { user, preview } = setup();
-      const purpose = screen.getByLabelText(/^Purpose/);
-      await user.clear(purpose);
-      await user.type(purpose, '<img src=x onerror="alert(1)"><b>bold</b>');
+      await chatUpdates(user, { purpose: '<img src=x onerror="alert(1)"><b>bold</b>' });
       expect(preview.querySelector("img")).toBeNull();
       expect(preview.querySelector("b")).toBeNull();
     });
 
-    it("does not render javascript: links typed into the form", async () => {
+    it("does not render javascript: links from the AI's field values", async () => {
       const { user, preview } = setup();
-      await user.type(screen.getByLabelText(/^MNDA modifications/), "[click](javascript:alert(1))");
+      await chatUpdates(user, { modifications: "[click](javascript:alert(1))" });
       for (const link of within(preview).queryAllByRole("link")) {
         expect(link.getAttribute("href") ?? "").not.toMatch(/^javascript:/i);
       }
@@ -298,12 +237,6 @@ describe("NdaCreator", () => {
       await user.click(screen.getByRole("button", { name: "Download PDF" }));
       expect(print).toHaveBeenCalledTimes(1);
       print.mockRestore();
-    });
-
-    it("does not submit the form when Enter is pressed in a field", async () => {
-      const { user, preview } = setup();
-      await user.type(screen.getByLabelText(/^Governing law/), "Texas{Enter}");
-      expect(within(preview).getByText("Governing Law: Texas")).toBeInTheDocument();
     });
   });
 });
