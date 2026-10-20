@@ -24,6 +24,8 @@ When writing code to make calls to LLMs, use your Cerebras skill to use LiteLLM 
 
 There is an OPENROUTER_API_KEY in the .env file in the project root.
 
+As a fallback (added at the user's request), when the OpenRouter call fails and ANTHROPIC_API_KEY is set in .env, the backend calls Claude Haiku 5.5 (`claude-haiku-5-5`) through the official `anthropic` Python SDK with structured outputs (`claude_fallback.py`).
+
 ## Technical design
 
 The entire project should be packaged into a Docker container.  
@@ -75,6 +77,6 @@ Backend available at http://localhost:8000
 - Next.js prefetches page data as `__next.<segment>.__PAGE__.txt` but the static export writes `__next.<segment>/__PAGE__.txt`; `FrontendFiles` in `main.py` maps one to the other.
 
 ### Known issues
-- The OpenRouter account is low on credit. OpenRouter then skips Cerebras and falls back to slower providers, which can take minutes or return unusable output, and it can refuse requests outright (402). The live AI browser tests (`npm run test:e2e`) fail until it is topped up.
+- The OpenRouter account is low on credit. OpenRouter then skips Cerebras and falls back to slower providers, which can take minutes or return unusable output, and it can refuse requests outright (402). Adding ANTHROPIC_API_KEY to .env makes the chat fall back to Claude instead; without it, the live AI browser tests (`npm run test:e2e`) fail until OpenRouter is topped up.
 - `/api/chat` requires sign-in, but there is no rate limit: any signed-up user can use the OpenRouter credit.
 - The old `/nda/` page no longer exists; the app lives at `/documents/`.
