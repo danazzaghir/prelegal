@@ -8,7 +8,7 @@ The available documents are covered in the catalog.json file in the project root
 
 @catalog.json
 
-The current implementation supports all 11 documents in the catalog via AI chat, with real accounts and saved agreements (reset when the server restarts). All planned Jira tickets (PL-2 to PL-7) are built.
+The current implementation supports all 11 documents in the catalog via AI chat, with real accounts and saved agreements (reset when the server restarts). All Jira tickets (PL-2 to PL-7) are Done and merged into `main`; there is no open work in Jira.
 
 ## Development process
 
@@ -56,7 +56,7 @@ Backend available at http://localhost:8000
 
 ## Implementation Status
 
-### Completed
+### Completed (all Done in Jira and merged into `main`)
 - PL-2: Common Paper templates in `templates/` and `catalog.json`
 - PL-3: Mutual NDA creator with live preview and PDF download
 - PL-4: Docker multi-stage build (Node frontend + Python backend); FastAPI backend with SQLite (fresh DB each container start); Next.js static export served by FastAPI at localhost:8000; start/stop scripts for Mac, Linux, Windows; placeholder login screen (replaced in PL-7)
@@ -74,7 +74,13 @@ Backend available at http://localhost:8000
 - Next.js remounts a page when its query string changes, so the creator lives in `app/documents/layout.tsx`; `DocumentsRoute.tsx` decides when to start a fresh creator and adds `?id=` after the first save.
 - Next.js prefetches page data as `__next.<segment>.__PAGE__.txt` but the static export writes `__next.<segment>/__PAGE__.txt`; `FrontendFiles` in `main.py` maps one to the other.
 
+### Testing
+- Backend: `cd backend && uv run pytest` (117 tests).
+- Frontend: `cd frontend && npm test` (138 Vitest tests, backend faked in `src/test-utils/fakeBackend.ts`), plus `npm run lint` and `npx tsc --noEmit`.
+- Browser: `cd frontend && npm run test:e2e` (Playwright against the static build served by the backend; each test signs up its own user). 4 of them call the real AI (desktop only) and need OpenRouter credit; run the rest with `--grep-invert "live AI"`.
+
 ### Known issues
-- The OpenRouter account is low on credit. OpenRouter then skips Cerebras and falls back to slower providers, which can take minutes or return unusable output, and it can refuse requests outright (402). The live AI browser tests (`npm run test:e2e`) fail until it is topped up.
+- The OpenRouter account is out of credit (last checked 20 October 2026), so the AI chat answers "out of credit" and the live AI browser tests fail until it is topped up. When credit is low, OpenRouter also skips Cerebras and falls back to slower providers, which can take minutes or return unusable output.
 - `/api/chat` requires sign-in, but there is no rate limit: any signed-up user can use the OpenRouter credit.
+- The session cookie is not marked HTTPS-only, because the app runs on plain `http://localhost`; add `secure=True` in `auth.py` if it is ever served over HTTPS.
 - The old `/nda/` page no longer exists; the app lives at `/documents/`.
