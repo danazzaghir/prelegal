@@ -63,5 +63,16 @@ Backend available at http://localhost:8000
 - PL-5: AI chat replaces the NDA form. `POST /api/chat` calls gpt-oss-120b via LiteLLM/OpenRouter (Cerebras) with Structured Outputs and returns a reply plus field updates; the conversation lives in the browser only
 - PL-6: all 11 documents. The backend reads parties and key terms from the template markup (`documents.py`, `GET /api/documents/{id}`); the AI picks the document (or suggests the closest one), always asks a follow-on question, and fills in key terms; the page is `/documents/`. The NDA keeps its own cover page; other documents get a key terms table
 
+### How the AI chat works (backend)
+- `models.py` holds the request/response models, `prompts.py` the system prompt, `chat.py` the LLM call and `POST /api/chat`.
+- The response has a required `question` field, appended to the reply, so every reply ends with a follow-on question (prompt instructions alone were not reliable).
+- When the AI chooses or switches document, the backend calls it a second time with that document's terms in the prompt.
+- LLM call: Cerebras is the preferred OpenRouter provider, with fallback to other providers allowed (the user's choice); `max_tokens` 2000; timeout 30s with one retry (a plain loop: LiteLLM's `num_retries` needs `tenacity`); a 402 from OpenRouter is not retried and shows an "out of credit" message.
+
 ### Not yet built
 - PL-7: real sign up / sign in (no `/api/auth` routes exist yet), saved documents, UI polish, and a "draft, subject to legal review" disclaimer
+
+### Known issues
+- The OpenRouter account is low on credit. OpenRouter then skips Cerebras and falls back to slower providers, which can take minutes or return unusable output, and it can refuse requests outright (402). The live AI browser tests (`npm run test:e2e`) fail until it is topped up.
+- `/api/chat` has no login or rate limit, so anyone who can reach the server can use the OpenRouter key (to be addressed with PL-7).
+- The old `/nda/` page no longer exists; the app lives at `/documents/`.
