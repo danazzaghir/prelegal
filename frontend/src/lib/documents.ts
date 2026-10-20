@@ -1,3 +1,5 @@
+import { api } from "@/lib/api";
+
 /** A Common Paper document, as served by GET /api/documents/{id}. */
 export type DocumentDetail = {
   id: string;
@@ -11,8 +13,4 @@ export type DocumentDetail = {
 export const NDA_ID = "Mutual-NDA";
 export const EFFECTIVE_DATE = "Effective Date";
 
-export async function fetchDocument(id: string): Promise<DocumentDetail> {
-  const response = await fetch(`/api/documents/${encodeURIComponent(id)}`);
-  if (!response.ok) throw new Error(`Couldn't load the document (${response.status}).`);
-  return (await response.json()) as DocumentDetail;
-}
+export const fetchDocument = (id: string) => api<DocumentDetail>(`/api/documents/${encodeURIComponent(id)}`);

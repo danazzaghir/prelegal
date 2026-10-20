@@ -11,6 +11,7 @@ from collections.abc import Callable
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from prelegal_backend.auth import SignedIn
 from prelegal_backend.documents import NDA_ID, Document
 from prelegal_backend.models import ChatRequest, ChatTurn, Draft, Party
 from prelegal_backend.prompts import build_messages
@@ -114,7 +115,7 @@ def run_turn(body: ChatRequest, documents: dict[str, Document], llm: LlmCall) ->
     return append_question(retry.model_copy(update={"document_id": new_id}))
 
 
-router = APIRouter(prefix="/api")
+router = APIRouter(prefix="/api", dependencies=[SignedIn])
 
 
 @router.post("/chat", response_model=ChatTurn, response_model_by_alias=True)

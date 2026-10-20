@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GREETING } from "@/lib/chat";
 import { emptyDraft } from "@/lib/draft";
-import { chatRequests, fakeApi, turn } from "@/test-utils/fakeChat";
+import { chatRequests, fakeApi, turn } from "@/test-utils/fakeBackend";
 import Chat from "./Chat";
 
 function setup() {
@@ -64,7 +64,26 @@ describe("Chat", () => {
     const [request] = chatRequests(fetchMock);
     expect(request.draft).toEqual(emptyDraft("sla"));
     expect(request.today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
-    expect(onTurn).toHaveBeenCalledWith(turn({ reply: "Noted.", terms: { "Target Uptime": "99.9%" } }));
+    expect(onTurn).toHaveBeenCalledWith(turn({ reply: "Noted.", terms: { "Target Uptime": "99.9%" } }), [
+      { role: "assistant", content: GREETING },
+      { role: "user", content: "99.9% uptime" },
+      { role: "assistant", content: "Noted." },
+    ]);
+  });
+
+  it("continues a saved conversation", async () => {
+    const fetchMock = fakeApi({ reply: "Done." });
+    const user = userEvent.setup();
+    const saved = [
+      { role: "assistant" as const, content: "Which uptime?" },
+      { role: "user" as const, content: "99.9%" },
+      { role: "assistant" as const, content: "Anything else?" },
+    ];
+    render(<Chat draft={emptyDraft("sla")} initialMessages={saved} onTurn={vi.fn()} />);
+    expect(bubbles()).toEqual(["Which uptime?", "99.9%", "Anything else?"]);
+    await user.type(screen.getByLabelText("Message"), "No{Enter}");
+    await screen.findByText("Done.");
+    expect(chatRequests(fetchMock)[0].messages).toEqual([...saved, { role: "user", content: "No" }]);
   });
 
   it("puts the cursor back in the message box after a reply, even when Send was clicked", async () => {

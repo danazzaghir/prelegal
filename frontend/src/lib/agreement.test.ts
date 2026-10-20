@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { DOCUMENTS } from "@/test-utils/fakeChat";
+import { DOCUMENTS } from "@/test-utils/fakeBackend";
 import { buildDocumentMarkdown } from "./agreement";
 import { emptyDraft, type Draft } from "./draft";
+import { DRAFT_NOTICE } from "./nda";
 
 const pilot = DOCUMENTS["Pilot-Agreement"];
 
@@ -12,7 +13,7 @@ function draft(changes: Partial<Draft> = {}): Draft {
 describe("buildDocumentMarkdown", () => {
   it("starts with the document's title and a cover page", () => {
     const md = buildDocumentMarkdown(pilot, draft());
-    expect(md.startsWith("# Pilot Agreement\n\n## Cover Page\n")).toBe(true);
+    expect(md.startsWith(`# Pilot Agreement\n\n${DRAFT_NOTICE}\n\n## Cover Page\n`)).toBe(true);
   });
 
   it("lists every key term with its value, or a blank line", () => {

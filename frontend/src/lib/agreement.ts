@@ -1,6 +1,6 @@
 import type { DocumentDetail } from "@/lib/documents";
 import type { Draft } from "@/lib/draft";
-import { blank, cell, formatDate, isIsoDate, stripTemplateMarkup } from "@/lib/nda";
+import { blank, cell, DRAFT_NOTICE, formatDate, isIsoDate, stripTemplateMarkup } from "@/lib/nda";
 
 /** A key term's value as it reads on the cover page; real dates are spelled out. */
 function termValue(value: string): string {
@@ -17,6 +17,8 @@ export function buildDocumentMarkdown(doc: DocumentDetail, draft: Draft): string
   const keyTerms = doc.terms.map((term) => `| ${term} | ${blank(cell(termValue(draft.terms[term] ?? "")))} |`).join("\n");
 
   return `# ${doc.name}
+
+${DRAFT_NOTICE}
 
 ## Cover Page
 

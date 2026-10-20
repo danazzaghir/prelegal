@@ -8,7 +8,7 @@ The available documents are covered in the catalog.json file in the project root
 
 @catalog.json
 
-The current implementation supports all 11 documents in the catalog via AI chat, behind a placeholder login. Real user authentication and document persistence are still to come (see Implementation Status).
+The current implementation supports all 11 documents in the catalog via AI chat, with real accounts and saved agreements (reset when the server restarts). All planned Jira tickets (PL-2 to PL-7) are built.
 
 ## Development process
 
@@ -59,9 +59,10 @@ Backend available at http://localhost:8000
 ### Completed
 - PL-2: Common Paper templates in `templates/` and `catalog.json`
 - PL-3: Mutual NDA creator with live preview and PDF download
-- PL-4: Docker multi-stage build (Node frontend + Python backend); FastAPI backend with SQLite (fresh DB each container start, `users` table not yet used); Next.js static export served by FastAPI at localhost:8000; start/stop scripts for Mac, Linux, Windows; placeholder login screen (any email and password, kept in the browser only)
+- PL-4: Docker multi-stage build (Node frontend + Python backend); FastAPI backend with SQLite (fresh DB each container start); Next.js static export served by FastAPI at localhost:8000; start/stop scripts for Mac, Linux, Windows; placeholder login screen (replaced in PL-7)
 - PL-5: AI chat replaces the NDA form. `POST /api/chat` calls gpt-oss-120b via LiteLLM/OpenRouter (Cerebras) with Structured Outputs and returns a reply plus field updates; the conversation lives in the browser only
 - PL-6: all 11 documents. The backend reads parties and key terms from the template markup (`documents.py`, `GET /api/documents/{id}`); the AI picks the document (or suggests the closest one), always asks a follow-on question, and fills in key terms; the page is `/documents/`. The NDA keeps its own cover page; other documents get a key terms table
+- PL-7: real accounts (`auth.py`: scrypt-hashed passwords, an HttpOnly session cookie; `/api/auth/signup`, `signin`, `signout`, `me`), sign-in required for every API except health; saved agreements (`agreements.py`, `/api/agreements`), auto-saved after each chat reply and listed on `/dashboard/`, reopened at `/documents/?id=N`; a draft notice above the agreement and at the top of every cover page (so in every PDF); polished sign-in, sign-up, dashboard and creator screens with a shared header
 
 ### How the AI chat works (backend)
 - `models.py` holds the request/response models, `prompts.py` the system prompt, `chat.py` the LLM call and `POST /api/chat`.
@@ -69,10 +70,11 @@ Backend available at http://localhost:8000
 - When the AI chooses or switches document, the backend calls it a second time with that document's terms in the prompt.
 - LLM call: Cerebras is the preferred OpenRouter provider, with fallback to other providers allowed (the user's choice); `max_tokens` 2000; timeout 30s with one retry (a plain loop: LiteLLM's `num_retries` needs `tenacity`); a 402 from OpenRouter is not retried and shows an "out of credit" message.
 
-### Not yet built
-- PL-7: real sign up / sign in (no `/api/auth` routes exist yet), saved documents, UI polish, and a "draft, subject to legal review" disclaimer
+### Frontend notes
+- Next.js remounts a page when its query string changes, so the creator lives in `app/documents/layout.tsx`; `DocumentsRoute.tsx` decides when to start a fresh creator and adds `?id=` after the first save.
+- Next.js prefetches page data as `__next.<segment>.__PAGE__.txt` but the static export writes `__next.<segment>/__PAGE__.txt`; `FrontendFiles` in `main.py` maps one to the other.
 
 ### Known issues
 - The OpenRouter account is low on credit. OpenRouter then skips Cerebras and falls back to slower providers, which can take minutes or return unusable output, and it can refuse requests outright (402). The live AI browser tests (`npm run test:e2e`) fail until it is topped up.
-- `/api/chat` has no login or rate limit, so anyone who can reach the server can use the OpenRouter key (to be addressed with PL-7).
+- `/api/chat` requires sign-in, but there is no rate limit: any signed-up user can use the OpenRouter credit.
 - The old `/nda/` page no longer exists; the app lives at `/documents/`.

@@ -2,7 +2,7 @@
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 from pydantic.alias_generators import to_camel
 
 
@@ -115,3 +115,50 @@ class ChatTurn(CamelModel):
     party2: PartyUpdates
     nda: NdaUpdates | None = Field(description="Only for the Mutual NDA; otherwise null")
     terms: list[TermUpdate] = Field(description="Key term updates for documents other than the Mutual NDA")
+
+
+# --- Accounts ------------------------------------------------------------------
+
+# Deliberately loose: the browser checks the format, this just rejects nonsense.
+EMAIL = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
+Email = Annotated[str, Field(pattern=EMAIL, max_length=254)]
+
+
+class SignUp(BaseModel):
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
+    email: Email
+    password: str = Field(min_length=8, max_length=200)
+
+
+class SignIn(BaseModel):
+    email: Email
+    password: str = Field(min_length=1, max_length=200)
+
+
+class UserOut(BaseModel):
+    id: int
+    name: str
+    email: str
+
+
+# --- Saved agreements --------------------------------------------------------
+
+
+class AgreementIn(BaseModel):
+    """What the browser saves after each chat turn."""
+
+    draft: Draft
+    messages: list[ChatMessage] = Field(max_length=200)
+
+
+class AgreementSummary(CamelModel):
+    id: int
+    document_id: str | None
+    title: str
+    created_at: str
+    updated_at: str
+
+
+class AgreementOut(AgreementSummary):
+    draft: Draft
+    messages: list[ChatMessage]
