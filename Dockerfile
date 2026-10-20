@@ -9,7 +9,7 @@ COPY templates/ /app/templates/
 RUN npm run build
 
 # Stage 2: the FastAPI backend, which serves the API and the built frontend.
-FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim
+FROM ghcr.io/astral-sh/uv:python3.14-bookworm-slim
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy
 WORKDIR /app/backend

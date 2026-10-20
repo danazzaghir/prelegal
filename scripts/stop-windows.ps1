@@ -5,8 +5,9 @@ if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-docker rm -f prelegal *> $null
-if ($LASTEXITCODE -eq 0) {
+# docker rm -f succeeds even when there is no container, so check first.
+if (docker ps -aq --filter "name=^prelegal$") {
+    docker rm -f prelegal *> $null
     Write-Host "Prelegal stopped."
 } else {
     Write-Host "Prelegal is not running."

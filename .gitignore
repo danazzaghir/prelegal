@@ -32,7 +32,6 @@ pip-wheel-metadata/
 venv/
 env/
 ENV/
-.python-version
 .uv/
 
 # Testing / type checking / linting
