@@ -49,7 +49,7 @@ describe("Login page", () => {
     await user.type(email, "ada@example.com");
     await user.type(password, "anything");
     await user.click(submit);
-    expect(push).toHaveBeenCalledWith("/nda/");
+    expect(push).toHaveBeenCalledWith("/documents/");
     expect(getSignedInEmail()).toBe("ada@example.com");
   });
 
@@ -57,7 +57,7 @@ describe("Login page", () => {
     const { user, email, password } = setup();
     await user.type(email, "ada@example.com");
     await user.type(password, "x{Enter}");
-    expect(push).toHaveBeenCalledWith("/nda/");
+    expect(push).toHaveBeenCalledWith("/documents/");
   });
 
   it("does not sign in with the fields empty", async () => {

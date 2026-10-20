@@ -1,13 +1,13 @@
 import path from "node:path";
 import type { NextConfig } from "next";
 
-// The app reads ../templates, so the repo root is the project root.
+// Tests read ../templates, so the repo root is the project root.
 const repoRoot = path.join(__dirname, "..");
 const backendUrl = process.env.BACKEND_URL ?? "http://localhost:8000";
 
 const nextConfig: NextConfig = {
   // Built as static files that the FastAPI backend serves (see backend/).
-  // Trailing slashes emit nda/index.html, which a static file server resolves.
+  // Trailing slashes emit documents/index.html, which a static file server resolves.
   output: "export",
   trailingSlash: true,
   outputFileTracingRoot: repoRoot,

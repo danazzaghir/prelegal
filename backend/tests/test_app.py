@@ -40,16 +40,16 @@ def test_serves_the_login_page_at_the_root(client):
     assert response.headers["content-type"].startswith("text/html")
 
 
-def test_serves_the_nda_page(client):
-    response = client.get("/nda/")
+def test_serves_the_documents_page(client):
+    response = client.get("/documents/")
     assert response.status_code == 200
-    assert "nda page" in response.text
+    assert "documents page" in response.text
 
 
 def test_redirects_to_add_the_trailing_slash(client):
-    response = client.get("/nda", follow_redirects=False)
+    response = client.get("/documents", follow_redirects=False)
     assert response.status_code in (301, 307)
-    assert response.headers["location"].endswith("/nda/")
+    assert response.headers["location"].endswith("/documents/")
 
 
 def test_serves_static_assets(client):

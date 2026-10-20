@@ -8,11 +8,11 @@ Prelegal fills in [Common Paper](https://commonpaper.com) standard agreements wi
 
 Early development. Today Prelegal has:
 
-- **Mutual NDA Creator with AI chat**: describe your agreement in a chat. The assistant asks about the parties and terms, fills in the Common Paper Mutual NDA as you answer, and you download it as a PDF.
+- **AI document creator**: tell the assistant what you need. It picks the right Common Paper agreement (or suggests the closest one if it can't draft what you asked for), asks about the parties and terms, fills in the agreement as you answer, and you download it as a PDF. All 11 agreements below are supported.
 - **Sign-in screen (placeholder)**: any email and password take you into the platform. Real accounts are planned.
 - **Foundation for v1**: FastAPI backend, SQLite database, Docker packaging and start/stop scripts.
 
-Planned: the rest of the templates in the AI chat, real sign up and sign in, and saved documents.
+Planned: real sign up and sign in, and saved documents.
 
 ## Supported agreements
 
@@ -20,17 +20,17 @@ The templates are in [`templates/`](templates/) and listed in [`catalog.json`](c
 
 | Agreement | Available in the app |
 |-----------|----------------------|
-| Mutual Non-Disclosure Agreement (with cover page) | Yes |
-| AI Addendum | Planned |
-| Business Associate Agreement (BAA) | Planned |
-| Cloud Service Agreement (CSA) | Planned |
-| Data Processing Agreement (DPA) | Planned |
-| Design Partner Agreement | Planned |
-| Partnership Agreement | Planned |
-| Pilot Agreement | Planned |
-| Professional Services Agreement (PSA) | Planned |
-| Service Level Agreement (SLA) | Planned |
-| Software License Agreement | Planned |
+| Mutual Non-Disclosure Agreement (with its own cover page) | Yes |
+| AI Addendum | Yes |
+| Business Associate Agreement (BAA) | Yes |
+| Cloud Service Agreement (CSA) | Yes |
+| Data Processing Agreement (DPA) | Yes |
+| Design Partner Agreement | Yes |
+| Partnership Agreement | Yes |
+| Pilot Agreement | Yes |
+| Professional Services Agreement (PSA) | Yes |
+| Service Level Agreement (SLA) | Yes |
+| Software License Agreement | Yes |
 
 ## Installation
 
@@ -52,8 +52,8 @@ The start script builds the image, starts the container and waits until it is re
 ## Usage
 
 1. Open http://localhost:8000 and sign in with any email and password.
-2. In the Mutual NDA Creator, chat with the assistant: tell it who the parties are, which state's law applies, and any terms you want to change. The agreement on the right updates after each answer; fields still blank show a line to fill in by hand. Press Enter to send, Shift+Enter for a new line.
-3. Click **Download PDF** and choose "Save as PDF" in the print dialog. The PDF has only the agreement: the cover page, then the Standard Terms on a new page.
+2. In the document creator, chat with the assistant: say what agreement you need and who it's between, then answer its questions. The agreement on the right updates after each answer; fields still blank show a line to fill in by hand. You can ask for a different agreement at any time, which starts a fresh draft. Press Enter to send, Shift+Enter for a new line.
+3. Click **Download PDF** and choose "Save as PDF" in the print dialog. The PDF has only the agreement: the cover page (key terms and signatures), then the Standard Terms on a new page.
 4. Click **Sign out** when you are done.
 
 ## Project layout

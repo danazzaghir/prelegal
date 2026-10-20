@@ -8,7 +8,7 @@ The available documents are covered in the catalog.json file in the project root
 
 @catalog.json
 
-The current implementation supports the Mutual NDA via AI chat, behind a placeholder login. The other document types, real user authentication and document persistence are still to come (see Implementation Status).
+The current implementation supports all 11 documents in the catalog via AI chat, behind a placeholder login. Real user authentication and document persistence are still to come (see Implementation Status).
 
 ## Development process
 
@@ -61,7 +61,7 @@ Backend available at http://localhost:8000
 - PL-3: Mutual NDA creator with live preview and PDF download
 - PL-4: Docker multi-stage build (Node frontend + Python backend); FastAPI backend with SQLite (fresh DB each container start, `users` table not yet used); Next.js static export served by FastAPI at localhost:8000; start/stop scripts for Mac, Linux, Windows; placeholder login screen (any email and password, kept in the browser only)
 - PL-5: AI chat replaces the NDA form. `POST /api/chat` calls gpt-oss-120b via LiteLLM/OpenRouter (Cerebras) with Structured Outputs and returns a reply plus field updates; the conversation lives in the browser only
+- PL-6: all 11 documents. The backend reads parties and key terms from the template markup (`documents.py`, `GET /api/documents/{id}`); the AI picks the document (or suggests the closest one), always asks a follow-on question, and fills in key terms; the page is `/documents/`. The NDA keeps its own cover page; other documents get a key terms table
 
 ### Not yet built
-- PL-6: AI chat for all the other document types, including steering users away from unsupported documents
 - PL-7: real sign up / sign in (no `/api/auth` routes exist yet), saved documents, UI polish, and a "draft, subject to legal review" disclaimer

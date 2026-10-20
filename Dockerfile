@@ -4,8 +4,6 @@ WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
-# The NDA page reads ../templates at build time.
-COPY templates/ /app/templates/
 RUN npm run build
 
 # Stage 2: the FastAPI backend, which serves the API and the built frontend.
@@ -18,6 +16,9 @@ RUN uv sync --locked --no-dev --no-install-project
 COPY backend/ ./
 RUN uv sync --locked --no-dev
 COPY --from=frontend /app/frontend/out /app/static
+# The Common Paper templates the backend serves and gives to the AI.
+COPY catalog.json /app/catalog.json
+COPY templates/ /app/templates/
 
 # The database lives inside the container and is recreated on every start.
 ENV PATH="/app/backend/.venv/bin:$PATH" \

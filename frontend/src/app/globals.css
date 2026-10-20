@@ -13,87 +13,87 @@ body {
 }
 
 /* Typography for the rendered agreement */
-.nda-document {
+.agreement {
   font-family: var(--font-serif);
   font-size: 0.95rem;
   line-height: 1.6;
   color: #0f172a;
   overflow-wrap: anywhere;
 }
-.nda-document h1 {
+.agreement h1 {
   font-size: 1.6rem;
   font-weight: 700;
   text-align: center;
   margin-bottom: 1.5rem;
 }
-.nda-document h2 {
+.agreement h2 {
   font-size: 1.15rem;
   font-weight: 700;
   margin: 1.5rem 0 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.03em;
 }
-.nda-document h1 + h2 {
+.agreement h1 + h2 {
   margin-top: 0;
 }
-.nda-document h3 {
+.agreement h3 {
   font-size: 1rem;
   font-weight: 700;
   margin: 1.1rem 0 0.25rem;
 }
-.nda-document p {
+.agreement p {
   margin: 0.5rem 0;
 }
-.nda-document ol {
+.agreement ol {
   list-style: decimal;
   padding-left: 1.5rem;
 }
-.nda-document li {
+.agreement li {
   margin: 0.6rem 0;
 }
-.nda-document a {
+.agreement a {
   color: #4338ca;
   text-decoration: underline;
 }
-.nda-document hr {
+.agreement hr {
   margin: 2rem 0;
   border-color: #cbd5e1;
 }
-.nda-document table {
+.agreement table {
   width: 100%;
   table-layout: fixed;
   border-collapse: collapse;
   margin: 1rem 0;
 }
 /* Label column, then two equal party columns */
-.nda-document th:first-child,
-.nda-document td:first-child {
+.agreement th:first-child,
+.agreement td:first-child {
   width: 28%;
 }
-.nda-document th,
-.nda-document td {
+.agreement th,
+.agreement td {
   border: 1px solid #cbd5e1;
   padding: 0.5rem 0.75rem;
   vertical-align: top;
 }
-.nda-document td {
+.agreement td {
   height: 2.5rem;
   hyphens: auto;
 }
 /* Row labels ("Signature", "Company") should never break mid-word */
-.nda-document td:first-child {
+.agreement td:first-child {
   overflow-wrap: normal;
 }
 @media (max-width: 640px) {
-  .nda-document table {
+  .agreement table {
     font-size: 0.8rem;
   }
-  .nda-document th,
-  .nda-document td {
+  .agreement th,
+  .agreement td {
     padding: 0.4rem 0.5rem;
   }
-  .nda-document th:first-child,
-  .nda-document td:first-child {
+  .agreement th:first-child,
+  .agreement td:first-child {
     width: 32%;
   }
 }
@@ -126,12 +126,12 @@ body {
     background: #fff;
   }
   /* Start the Standard Terms on a new page */
-  .nda-document hr {
+  .agreement hr {
     break-after: page;
     border: 0;
     margin: 0;
   }
-  .nda-document table {
+  .agreement table {
     break-inside: avoid;
   }
 }

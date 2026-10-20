@@ -24,12 +24,12 @@ test.describe("Fake login", () => {
     await expect(page.getByRole("button", { name: "Sign in" })).toHaveCSS("background-color", "rgb(117, 57, 145)");
   });
 
-  test("any email and password bring the user to the NDA creator", async ({ page }) => {
+  test("any email and password bring the user to the document creator", async ({ page }) => {
     await page.getByLabel("Email").fill("ada@example.com");
     await page.getByLabel("Password").fill("anything");
     await page.getByRole("button", { name: "Sign in" }).click();
-    await expect(page).toHaveURL(/\/nda\/$/);
-    await expect(page.getByRole("heading", { level: 1, name: /Mutual NDA Creator/ })).toBeVisible();
+    await expect(page).toHaveURL(/\/documents\/$/);
+    await expect(page.getByRole("heading", { level: 1, name: /Prelegal · New agreement/ })).toBeVisible();
     await expect(page.getByText("ada@example.com")).toBeVisible();
   });
 
@@ -37,7 +37,7 @@ test.describe("Fake login", () => {
     await page.getByLabel("Email").fill("ada@example.com");
     await page.getByLabel("Password").fill("x");
     await page.getByLabel("Password").press("Enter");
-    await expect(page).toHaveURL(/\/nda\/$/);
+    await expect(page).toHaveURL(/\/documents\/$/);
     await page.reload();
     await expect(page.getByText("ada@example.com")).toBeVisible();
   });
@@ -59,7 +59,7 @@ test.describe("Fake login", () => {
     await page.getByRole("button", { name: "Sign out" }).click();
     await expect(page).toHaveURL(/\/$/);
     await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
-    await page.goto("/nda/");
+    await page.goto("/documents/");
     await expect(page.getByText("ada@example.com")).toHaveCount(0);
   });
 });
@@ -71,10 +71,10 @@ test.describe("Backend", () => {
     expect(await response.json()).toEqual({ status: "ok", database: "ok" });
   });
 
-  test("redirects /nda to /nda/", async ({ page }) => {
-    await page.goto("/nda");
-    await expect(page).toHaveURL(/\/nda\/$/);
-    await expect(page.getByRole("heading", { level: 1, name: /Mutual NDA Creator/ })).toBeVisible();
+  test("redirects /documents to /documents/", async ({ page }) => {
+    await page.goto("/documents");
+    await expect(page).toHaveURL(/\/documents\/$/);
+    await expect(page.getByRole("heading", { level: 1, name: /Prelegal · New agreement/ })).toBeVisible();
   });
 
   test("serves the frontend 404 page for unknown pages", async ({ page }) => {

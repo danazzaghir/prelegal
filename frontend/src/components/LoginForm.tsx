@@ -16,7 +16,7 @@ export default function LoginForm() {
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     signIn(email);
-    router.push("/nda/");
+    router.push("/documents/");
   };
 
   return (

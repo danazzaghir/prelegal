@@ -44,6 +44,17 @@ export function todayIso(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
+/** Text shaped like a YYYY-MM-DD date, real or not. */
+export const looksLikeIsoDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
+
+/** A real calendar date as YYYY-MM-DD (rejects shapes like 2026-02-30). */
+export function isIsoDate(value: string): boolean {
+  if (!looksLikeIsoDate(value)) return false;
+  const [y, m, d] = value.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d;
+}
+
 export function formatDate(isoDate: string): string {
   if (!isoDate) return "";
   const [y, m, d] = isoDate.split("-").map(Number);
@@ -80,10 +91,10 @@ export function stripTemplateMarkup(markdown: string): string {
   return markdown.replace(/<span[^>]*>(.*?)<\/span>/g, "$1");
 }
 
-const blank = (value: string) => value.trim() || BLANK;
+export const blank = (value: string) => value.trim() || BLANK;
 
 // Keeps user input from breaking the markdown table it is placed in.
-const cell = (value: string) =>
+export const cell = (value: string) =>
   value
     .trim()
     .replace(/\|/g, "\\|")
