@@ -11,10 +11,10 @@ from prelegal_backend.main import create_app
 def static_dir(tmp_path: Path) -> Path:
     """A stand-in for the exported frontend, laid out like `next build` output."""
     out = tmp_path / "out"
-    (out / "nda").mkdir(parents=True)
+    (out / "documents").mkdir(parents=True)
     (out / "_next").mkdir()
     (out / "index.html").write_text("<h1>login page</h1>")
-    (out / "nda" / "index.html").write_text("<h1>nda page</h1>")
+    (out / "documents" / "index.html").write_text("<h1>documents page</h1>")
     (out / "404.html").write_text("<h1>not found page</h1>")
     (out / "_next" / "app.js").write_text("console.log('app')")
     return out

@@ -13,6 +13,9 @@ class Settings:
     database_path: Path
     # The statically exported frontend (`npm run build` in frontend/).
     static_dir: Path
+    # The Common Paper templates and their catalog (repo root; /app in Docker).
+    templates_dir: Path = REPO_DIR / "templates"
+    catalog_path: Path = REPO_DIR / "catalog.json"
     host: str = "127.0.0.1"
     port: int = 8000
 
@@ -23,6 +26,8 @@ class Settings:
         return cls(
             database_path=Path(os.environ.get("DATABASE_PATH", BACKEND_DIR / "data" / "prelegal.db")),
             static_dir=Path(os.environ.get("STATIC_DIR", REPO_DIR / "frontend" / "out")),
+            templates_dir=Path(os.environ.get("TEMPLATES_DIR", REPO_DIR / "templates")),
+            catalog_path=Path(os.environ.get("CATALOG_PATH", REPO_DIR / "catalog.json")),
             host=os.environ.get("HOST", "127.0.0.1"),
             port=int(os.environ.get("PORT", "8000")),
         )

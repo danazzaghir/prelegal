@@ -1,138 +1,62 @@
-"""AI chat that fills in the Mutual NDA.
+"""AI chat that works out which document the user needs and fills it in.
 
-The browser keeps the conversation and the current fields, and sends both on
-every turn. The AI answers with a reply and updates to any fields it learned.
+The browser keeps the conversation and the draft, and sends both on every turn.
+The AI answers with a reply, a follow-on question, the document being drafted,
+and updates to any fields it learned.
 """
 
-import json
 import logging
 import os
 from collections.abc import Callable
-from typing import Annotated, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, Field
-from pydantic.alias_generators import to_camel
+from fastapi import APIRouter, Depends, HTTPException, Request
+
+from prelegal_backend.documents import NDA_ID, Document
+from prelegal_backend.models import ChatRequest, ChatTurn, Draft, Party
+from prelegal_backend.prompts import build_messages
 
 logger = logging.getLogger(__name__)
 
 MODEL = "openrouter/openai/gpt-oss-120b"
+# Cerebras first. If it can't take the request (for example when the account is
+# low on credit), OpenRouter may use another provider, which can be slower.
 EXTRA_BODY = {"provider": {"order": ["cerebras"]}}
-# Seconds to wait for the AI before giving up; replies usually take a few.
-TIMEOUT = 60
-
-ISO_DATE = r"^\d{4}-\d{2}-\d{2}$"
-ISO_DATE_OR_EMPTY = r"^(\d{4}-\d{2}-\d{2})?$"
-
-
-class CamelModel(BaseModel):
-    """Uses the frontend's camelCase field names in JSON."""
-
-    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+# Replies use a few hundred tokens. Without a cap, OpenRouter reserves credit for
+# the model maximum (about 41k tokens) and skips Cerebras when credit is low; the
+# cap also stops a fallback provider that rambles without finishing its answer.
+MAX_TOKENS = 2000
+# Replies usually take under 10 seconds. A stuck call is retried once rather
+# than left waiting, so the user hears back within about a minute either way.
+TIMEOUT = 30
+RETRIES = 1
 
 
-ShortText = Annotated[str, Field(max_length=500)]
-LongText = Annotated[str, Field(max_length=4000)]
+def append_question(turn: ChatTurn) -> ChatTurn:
+    """Puts the follow-on question at the end of the reply, so every reply asks one."""
+    question = turn.question.strip()
+    reply = turn.reply.strip()
+    if question and question not in reply:
+        reply = f"{reply}\n\n{question}" if reply else question
+    return turn.model_copy(update={"reply": reply, "question": question})
 
 
-# What the browser sends. Field names must match NdaData in
-# frontend/src/lib/nda.ts and NdaUpdates below (a test checks the latter).
+def clean_turn(turn: ChatTurn, current_id: str | None, documents: dict[str, Document]) -> ChatTurn:
+    """Drops anything the AI returned that doesn't fit the document being drafted."""
+    document_id = turn.document_id if turn.document_id in documents else None
+    doc = documents.get(document_id or current_id or "")
+    is_nda = doc is not None and doc.id == NDA_ID
+    # The AI sometimes lists every term with "" for the ones it doesn't know yet.
+    terms = [] if doc is None or is_nda else [u for u in turn.terms if u.term in doc.terms and u.value.strip()]
+    return turn.model_copy(update={"document_id": document_id, "nda": turn.nda if is_nda else None, "terms": terms})
 
 
-class Party(CamelModel):
-    name: ShortText
-    title: ShortText
-    company: ShortText
-    notice_address: ShortText
-
-
-class NdaFields(CamelModel):
-    purpose: LongText
-    effective_date: str = Field(pattern=ISO_DATE_OR_EMPTY)
-    mnda_term_type: Literal["expires", "untilTerminated"]
-    mnda_term_years: int
-    confidentiality_term_type: Literal["years", "perpetuity"]
-    confidentiality_term_years: int
-    governing_law: ShortText
-    jurisdiction: ShortText
-    modifications: LongText
-    party1: Party
-    party2: Party
-
-
-class ChatMessage(BaseModel):
-    role: Literal["user", "assistant"]
-    content: LongText
-
-
-class ChatRequest(BaseModel):
-    messages: list[ChatMessage] = Field(min_length=1, max_length=100)
-    fields: NdaFields
-    today: str = Field(pattern=ISO_DATE, description="The user's date, YYYY-MM-DD")
-
-
-# What the AI returns, via Structured Outputs. Every field is required but
-# nullable: null means "no change", so the AI can't wipe out a field by leaving it out.
-
-
-class PartyUpdates(CamelModel):
-    name: str | None
-    title: str | None
-    company: str | None
-    notice_address: str | None
-
-
-class NdaUpdates(CamelModel):
-    purpose: str | None
-    effective_date: str | None = Field(description="YYYY-MM-DD")
-    mnda_term_type: Literal["expires", "untilTerminated"] | None
-    mnda_term_years: int | None
-    confidentiality_term_type: Literal["years", "perpetuity"] | None
-    confidentiality_term_years: int | None
-    governing_law: str | None
-    jurisdiction: str | None
-    modifications: str | None
-    party1: PartyUpdates
-    party2: PartyUpdates
-
-
-class ChatTurn(CamelModel):
-    reply: str
-    updates: NdaUpdates
-
-
-SYSTEM_PROMPT = """You are Prelegal's assistant. You help the user fill in a Mutual Non-Disclosure Agreement (MNDA) based on the Common Paper Mutual NDA standard terms. The user sees the agreement update live next to this chat.
-
-The cover page fields are:
-- purpose: how the parties may use each other's Confidential Information.
-- effectiveDate: the date the MNDA starts, as YYYY-MM-DD.
-- mndaTermType: "expires" (ends a number of years after the Effective Date) or "untilTerminated" (continues until a party terminates it).
-- mndaTermYears: the number of years, when mndaTermType is "expires".
-- confidentialityTermType: "years" (protected for a number of years after the Effective Date) or "perpetuity".
-- confidentialityTermYears: the number of years, when confidentialityTermType is "years".
-- governingLaw: the US state whose law governs, e.g. "Delaware".
-- jurisdiction: the city or county and state whose courts hear disputes, e.g. "New Castle, DE".
-- modifications: optional changes to the standard terms. Leave empty unless the user asks for changes.
-- party1 and party2: for each party, the signer's name, their title, the company, and a notice address (an email or postal address).
-
-How to behave:
-- Be friendly, brief and plain-spoken. Ask at most two questions per reply, about the most important missing fields first: the parties, then governing law and jurisdiction.
-- Some fields start with sensible defaults (the purpose, a 1-year MNDA term and 1-year confidentiality term). Near the end, mention the defaults in one sentence and ask if they are fine, rather than asking about each one.
-- Whenever the user gives information, put it in "updates". Use null for every field that should not change.
-- Never make up names, companies, addresses or dates. If something is unclear, ask.
-- Convert dates the user gives into YYYY-MM-DD. Today is {today}; the effective date defaults to today.
-- If the user asks to change a field, update it. If they ask about the agreement, answer briefly; you are not a lawyer and the document is a draft for legal review.
-- When every field is filled in, say the agreement is ready and that they can download it with the "Download PDF" button.
-
-The current values of the fields are:
-{fields}
-"""
-
-
-def build_messages(request: ChatRequest) -> list[dict[str, str]]:
-    fields = json.dumps(request.fields.model_dump(by_alias=True), indent=2)
-    system = SYSTEM_PROMPT.format(today=request.today, fields=fields)
-    return [{"role": "system", "content": system}] + [m.model_dump() for m in request.messages]
+def draft_after_choosing(draft: Draft, document_id: str) -> Draft:
+    """The draft as the browser will hold it once the AI chooses document_id."""
+    if draft.document_id is None:
+        return draft.model_copy(update={"document_id": document_id})
+    # Switching starts a fresh draft (the browser does the same).
+    empty = Party(name="", title="", company="", notice_address="")
+    return draft.model_copy(update={"document_id": document_id, "party1": empty, "party2": empty, "terms": {}})
 
 
 LlmCall = Callable[[list[dict[str, str]]], ChatTurn]
@@ -141,15 +65,29 @@ LlmCall = Callable[[list[dict[str, str]]], ChatTurn]
 def call_llm(messages: list[dict[str, str]]) -> ChatTurn:
     from litellm import completion  # Slow to import, so only when first used.
 
-    response = completion(
-        model=MODEL,
-        messages=messages,
-        response_format=ChatTurn,
-        reasoning_effort="low",
-        extra_body=EXTRA_BODY,
-        timeout=TIMEOUT,
-    )
-    return ChatTurn.model_validate_json(response.choices[0].message.content)
+    # A plain loop: LiteLLM's own num_retries needs the tenacity package.
+    for attempt in range(RETRIES + 1):
+        try:
+            response = completion(
+                model=MODEL,
+                messages=messages,
+                response_format=ChatTurn,
+                reasoning_effort="low",
+                max_tokens=MAX_TOKENS,
+                extra_body=EXTRA_BODY,
+                timeout=TIMEOUT,
+            )
+            return ChatTurn.model_validate_json(response.choices[0].message.content)
+        except Exception as e:
+            if attempt == RETRIES or is_out_of_credit(e):
+                raise
+            logger.warning("AI chat call failed; retrying", exc_info=True)
+    raise AssertionError("unreachable")
+
+
+def is_out_of_credit(error: Exception) -> bool:
+    """OpenRouter answers 402 Payment Required when the account can't pay for a request."""
+    return getattr(error, "status_code", None) == 402
 
 
 def get_llm() -> LlmCall:
@@ -159,15 +97,39 @@ def get_llm() -> LlmCall:
     return call_llm
 
 
+def run_turn(body: ChatRequest, documents: dict[str, Document], llm: LlmCall) -> ChatTurn:
+    current_id = body.draft.document_id
+    turn = clean_turn(llm(build_messages(body, documents)), current_id, documents)
+    new_id = turn.document_id
+    if new_id is None or new_id == current_id:
+        return append_question(turn)
+    # The AI has just chosen a document without seeing its terms. Ask again with
+    # them in the prompt, so the details the user already gave are filled in.
+    body = body.model_copy(update={"draft": draft_after_choosing(body.draft, new_id)})
+    try:
+        retry = clean_turn(llm(build_messages(body, documents)), new_id, documents)
+    except Exception:
+        logger.exception("AI chat call with the chosen document failed; using the first answer")
+        return append_question(turn)
+    return append_question(retry.model_copy(update={"document_id": new_id}))
+
+
 router = APIRouter(prefix="/api")
 
 
 @router.post("/chat", response_model=ChatTurn, response_model_by_alias=True)
-def chat(request: ChatRequest, llm: LlmCall = Depends(get_llm)) -> ChatTurn:
-    if request.messages[-1].role != "user":
+def chat(body: ChatRequest, request: Request, llm: LlmCall = Depends(get_llm)) -> ChatTurn:
+    documents: dict[str, Document] = request.app.state.documents
+    if body.messages[-1].role != "user":
         raise HTTPException(status_code=422, detail="The last message must be from the user.")
+    if body.draft.document_id is not None and body.draft.document_id not in documents:
+        raise HTTPException(status_code=422, detail="Unknown document.")
     try:
-        return llm(build_messages(request))
-    except Exception:
+        return run_turn(body, documents, llm)
+    except Exception as e:
         logger.exception("AI chat call failed")
+        if is_out_of_credit(e):
+            raise HTTPException(
+                status_code=503, detail="The AI assistant is unavailable: the OpenRouter account is out of credit."
+            )
         raise HTTPException(status_code=502, detail="The AI assistant didn't respond. Please try again.")

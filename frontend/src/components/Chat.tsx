@@ -2,24 +2,27 @@
 
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
-import { GREETING, sendChat, type ChatMessage, type NdaUpdates } from "@/lib/chat";
-import { todayIso, type NdaData } from "@/lib/nda";
+import { GREETING, sendChat, type ChatMessage, type ChatTurn } from "@/lib/chat";
+import type { Draft } from "@/lib/draft";
+import { todayIso } from "@/lib/nda";
 
 // A reply steered by pasted text could use an image URL to send chat content elsewhere.
 const NO_IMAGES = ["img"];
 
 type Props = {
-  fields: NdaData;
-  onUpdates: (updates: NdaUpdates) => void;
+  // The draft as the AI should see it, with defaults filled in.
+  draft: Draft;
+  onTurn: (turn: ChatTurn) => void;
 };
 
-/** Freeform chat with the AI, which fills in the NDA as the user answers. */
-export default function NdaChat({ fields, onUpdates }: Props) {
+/** Freeform chat with the AI, which picks the document and fills it in as the user answers. */
+export default function Chat({ draft, onTurn }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([{ role: "assistant", content: GREETING }]);
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const listRef = useRef<HTMLOListElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     const list = listRef.current;
@@ -35,9 +38,9 @@ export default function NdaChat({ fields, onUpdates }: Props) {
     setError(null);
     setPending(true);
     try {
-      const turn = await sendChat(history, fields, todayIso());
+      const turn = await sendChat(history, draft, todayIso());
       setMessages([...history, { role: "assistant", content: turn.reply }]);
-      onUpdates(turn.updates);
+      onTurn(turn);
     } catch (e) {
       // Put the message back so the user can send it again.
       setMessages(messages);
@@ -46,6 +49,8 @@ export default function NdaChat({ fields, onUpdates }: Props) {
       setError(e instanceof Error ? e.message : "Something went wrong. Please try again.");
     } finally {
       setPending(false);
+      // Ready for the next answer, even if Send was clicked rather than Enter pressed.
+      inputRef.current?.focus();
     }
   };
 
@@ -103,6 +108,7 @@ export default function NdaChat({ fields, onUpdates }: Props) {
         }}
       >
         <textarea
+          ref={inputRef}
           aria-label="Message"
           rows={2}
           placeholder="Type your answer…"

