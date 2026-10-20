@@ -9,10 +9,12 @@ Prelegal fills in [Common Paper](https://commonpaper.com) standard agreements wi
 Early development. Today Prelegal has:
 
 - **AI document creator**: tell the assistant what you need. It picks the right Common Paper agreement (or suggests the closest one if it can't draft what you asked for), asks about the parties and terms, fills in the agreement as you answer, and you download it as a PDF. All 11 agreements below are supported.
-- **Sign-in screen (placeholder)**: any email and password take you into the platform. Real accounts are planned.
-- **Foundation for v1**: FastAPI backend, SQLite database, Docker packaging and start/stop scripts.
+- **Accounts**: sign up with your name, email and password, and sign in again later. Everything except the sign-in and sign-up pages needs an account.
+- **My agreements**: every agreement is saved as you chat. Come back to it from the dashboard to keep chatting or download it again.
+- **Draft notice**: each agreement says it is a draft for a qualified lawyer to review, on screen and in the PDF.
+- **Foundation**: FastAPI backend, SQLite database, Docker packaging and start/stop scripts.
 
-Planned: real sign up and sign in, and saved documents.
+The database starts empty every time Prelegal starts, so accounts and saved agreements last until it is restarted.
 
 ## Supported agreements
 
@@ -51,10 +53,11 @@ The start script builds the image, starts the container and waits until it is re
 
 ## Usage
 
-1. Open http://localhost:8000 and sign in with any email and password.
-2. In the document creator, chat with the assistant: say what agreement you need and who it's between, then answer its questions. The agreement on the right updates after each answer; fields still blank show a line to fill in by hand. You can ask for a different agreement at any time, which starts a fresh draft. Press Enter to send, Shift+Enter for a new line.
+1. Open http://localhost:8000 and create an account (or sign in).
+2. On **My agreements**, click **New agreement**. In the document creator, chat with the assistant: say what agreement you need and who it's between, then answer its questions. The agreement on the right updates after each answer; fields still blank show a line to fill in by hand. You can ask for a different agreement at any time, which starts a fresh draft. Press Enter to send, Shift+Enter for a new line.
 3. Click **Download PDF** and choose "Save as PDF" in the print dialog. The PDF has only the agreement: the cover page (key terms and signatures), then the Standard Terms on a new page.
-4. Click **Sign out** when you are done.
+4. Your agreement is saved after every reply (the header shows "Saved"). It appears on **My agreements**, where you can open it to keep chatting, or delete it.
+5. Click **Sign out** when you are done.
 
 ## Project layout
 

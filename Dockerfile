@@ -4,6 +4,8 @@ WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
+# The sign-in screen lists the agreements from the catalog at build time.
+COPY catalog.json /app/catalog.json
 RUN npm run build
 
 # Stage 2: the FastAPI backend, which serves the API and the built frontend.

@@ -100,9 +100,16 @@ export const cell = (value: string) =>
     .replace(/\|/g, "\\|")
     .replace(/\s*\r?\n\s*/g, ", ");
 
+/** Printed under the title of every agreement, so it is in every PDF too. */
+export const DRAFT_NOTICE =
+  "*Draft for legal review. Prelegal generated this document from Common Paper standard terms. " +
+  "Have a qualified lawyer review it before anyone signs it. It is not legal advice.*";
+
 export function buildNdaMarkdown(data: NdaData, standardTerms: string): string {
   const { party1: p1, party2: p2 } = data;
   return `# Mutual Non-Disclosure Agreement
+
+${DRAFT_NOTICE}
 
 ## Cover Page
 

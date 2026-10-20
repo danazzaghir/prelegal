@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { NdaUpdates } from "@/lib/chat";
-import { DOCUMENTS, noNdaUpdates, turn } from "@/test-utils/fakeChat";
+import { DOCUMENTS, noNdaUpdates, turn } from "@/test-utils/fakeBackend";
 import { applyNdaUpdates, applyTurn, emptyDraft, ndaData, withDefaults, type Draft } from "./draft";
 import { defaultNdaData } from "./nda";
 

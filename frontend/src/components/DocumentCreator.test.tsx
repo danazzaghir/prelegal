@@ -1,18 +1,23 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { chatRequests, fakeApi, type TurnChanges } from "@/test-utils/fakeChat";
+import { ADA, chatRequests, fakeApi, fakeServer, requestsTo, savedAgreement, type TurnChanges } from "@/test-utils/fakeBackend";
 import DocumentCreator from "./DocumentCreator";
 
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
+const router = { push: vi.fn(), replace: vi.fn() };
+vi.mock("next/navigation", () => ({ useRouter: () => router, usePathname: () => "/documents/" }));
 
 type User = ReturnType<typeof userEvent.setup>;
 
-function setup() {
+/** Renders a new agreement for a signed-in user (unless fetch is already faked) and waits for the chat. */
+async function setup({ savedId = null as number | null, fake = true } = {}) {
+  if (fake) fakeApi();
   const user = userEvent.setup();
-  render(<DocumentCreator />);
+  const onCreated = vi.fn();
+  render(<DocumentCreator savedId={savedId} onCreated={onCreated} />);
+  await screen.findByLabelText("Message");
   const preview = screen.getByRole("article", { name: "Agreement" });
-  return { user, preview };
+  return { user, preview, onCreated };
 }
 
 /** Sends a chat message and waits for the AI's (fake) reply. */
@@ -56,27 +61,28 @@ describe("DocumentCreator", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+    router.push.mockClear();
+    router.replace.mockClear();
   });
 
   describe("before a document is chosen", () => {
-    it("shows the chat, an empty agreement and a disabled download", () => {
-      fakeApi();
-      setup();
-      expect(screen.getByRole("heading", { level: 1, name: "Prelegal · New agreement" })).toBeInTheDocument();
+    it("shows the chat, an empty agreement and a disabled download", async () => {
+      await setup();
+      expect(screen.getByRole("heading", { level: 1, name: "New agreement" })).toBeInTheDocument();
       expect(screen.getByRole("region", { name: "Chat with the Prelegal assistant" })).toBeInTheDocument();
       expect(screen.getByText(/Your agreement will appear here/)).toBeInTheDocument();
       expect(screen.getByRole("button", { name: "Download PDF" })).toBeDisabled();
     });
 
     it("sends an empty draft with no document", async () => {
-      const { user } = setup();
+      const { user } = await setup();
       const fetchMock = await chat(user, {});
       expect(chatRequests(fetchMock)[0].draft.documentId).toBeNull();
       expect(screen.getByText(/Your agreement will appear here/)).toBeInTheDocument();
     });
 
-    it("shows the CC BY 4.0 attribution", () => {
-      setup();
+    it("shows the CC BY 4.0 attribution", async () => {
+      await setup();
       expect(screen.getByRole("link", { name: "CC BY 4.0" })).toHaveAttribute(
         "href",
         "https://creativecommons.org/licenses/by/4.0/",
@@ -86,11 +92,12 @@ describe("DocumentCreator", () => {
 
   describe("a document from the catalog", () => {
     it("loads the chosen document and shows its cover page and standard terms", async () => {
-      const { user, preview } = setup();
+      const { user, preview } = await setup();
       const fetchMock = await chat(user, { documentId: "Pilot-Agreement" });
       await coverPage(preview, "Pilot Agreement");
-      expect(fetchMock).toHaveBeenCalledWith("/api/documents/Pilot-Agreement");
-      expect(screen.getByRole("heading", { level: 1, name: "Prelegal · Pilot Agreement" })).toBeInTheDocument();
+      expect(fetchMock).toHaveBeenCalledWith("/api/documents/Pilot-Agreement", expect.anything());
+      // The page title, as well as the agreement's own.
+      expect(screen.getAllByRole("heading", { level: 1, name: "Pilot Agreement" })).toHaveLength(2);
       expect(screen.getByRole("button", { name: "Download PDF" })).toBeEnabled();
       expect(within(preview).getByRole("heading", { level: 2, name: "Cover Page" })).toBeInTheDocument();
       expect(within(preview).getByText(/During the Pilot Period and subject to the terms/)).toBeInTheDocument();
@@ -98,7 +105,7 @@ describe("DocumentCreator", () => {
     });
 
     it("fills in key terms, parties and today's effective date", async () => {
-      const { user, preview } = setup();
+      const { user, preview } = await setup();
       await chat(user, {
         documentId: "Pilot-Agreement",
         terms: { "Pilot Period": "90 days", "Governing Law": "Delaware" },
@@ -116,7 +123,7 @@ describe("DocumentCreator", () => {
     });
 
     it("sends the draft with today's effective date on the next turn", async () => {
-      const { user, preview } = setup();
+      const { user, preview } = await setup();
       const fetchMock = await chat(user, { documentId: "Pilot-Agreement", terms: { "Pilot Period": "90 days" } });
       await coverPage(preview, "Pilot Agreement");
       const second = fakeApi({ reply: "Next" });
@@ -124,11 +131,12 @@ describe("DocumentCreator", () => {
       const { draft } = chatRequests(second)[0];
       expect(draft.documentId).toBe("Pilot-Agreement");
       expect(draft.terms).toEqual({ "Pilot Period": "90 days", "Effective Date": "2026-10-16" });
-      expect(fetchMock).toHaveBeenCalledTimes(2);
+      // The document was fetched once, not again for the second turn.
+      expect(fetchMock.mock.calls.filter(([url]) => String(url).startsWith("/api/documents/"))).toHaveLength(1);
     });
 
     it("starts a fresh draft when the AI switches documents", async () => {
-      const { user, preview } = setup();
+      const { user, preview } = await setup();
       await chat(
         user,
         { documentId: "Pilot-Agreement", terms: { "Pilot Period": "90 days" }, party1: { company: "Acme" } },
@@ -141,7 +149,7 @@ describe("DocumentCreator", () => {
     });
 
     it("tries loading the document again on the next turn after a failure", async () => {
-      const { user, preview } = setup();
+      const { user, preview } = await setup();
       const api = fakeApi({ documentId: "sla", reply: "Reply 1" }, { reply: "Reply 2" });
       let failNext = true;
       vi.stubGlobal(
@@ -155,15 +163,15 @@ describe("DocumentCreator", () => {
         }),
       );
       await say(user, "An SLA", "Reply 1");
-      expect(await within(preview).findByText(/Couldn't load the document \(500\)/)).toBeInTheDocument();
+      expect(await within(preview).findByText("Something went wrong. Please try again.")).toBeInTheDocument();
       await say(user, "Try again", "Reply 2");
       await coverPage(preview, "Service Level Agreement");
     });
 
     it("explains when the document can't be loaded", async () => {
-      const { user, preview } = setup();
+      const { user, preview } = await setup();
       await chat(user, { documentId: "no-such-document" });
-      expect(await within(preview).findByText(/Couldn't load the document \(404\)/)).toBeInTheDocument();
+      expect(await within(preview).findByText("Unknown document.")).toBeInTheDocument();
     });
   });
 
@@ -174,7 +182,7 @@ describe("DocumentCreator", () => {
     }
 
     it("keeps its own cover page with defaults and today's date", async () => {
-      const { user, preview } = setup();
+      const { user, preview } = await setup();
       await startNda(user, preview);
       expect(sectionText(preview, "Purpose")).toBe("Evaluating whether to enter into a business relationship with the other party.");
       expect(sectionText(preview, "Effective Date")).toBe("October 16, 2026");
@@ -185,7 +193,7 @@ describe("DocumentCreator", () => {
     });
 
     it("fills in NDA fields and both parties", async () => {
-      const { user, preview } = setup();
+      const { user, preview } = await setup();
       await startNda(user, preview, {
         nda: { governingLaw: "Delaware", jurisdiction: "New Castle, DE", mndaTermType: "untilTerminated" },
         party1: { name: "Ada Lovelace", company: "Analytical Ltd", noticeAddress: "ada@analytical.example" },
@@ -202,7 +210,7 @@ describe("DocumentCreator", () => {
 
   describe("safety", () => {
     it("shows HTML, images and javascript: links from the AI's values as text", async () => {
-      const { user, preview } = setup();
+      const { user, preview } = await setup();
       await chat(user, {
         documentId: "Pilot-Agreement",
         terms: {
@@ -223,12 +231,122 @@ describe("DocumentCreator", () => {
   describe("download", () => {
     it("opens the print dialog to save a PDF", async () => {
       const print = vi.spyOn(window, "print").mockImplementation(() => {});
-      const { user, preview } = setup();
+      const { user, preview } = await setup();
       await chat(user, { documentId: "sla" });
       await coverPage(preview, "Service Level Agreement");
       await user.click(screen.getByRole("button", { name: "Download PDF" }));
       expect(print).toHaveBeenCalledTimes(1);
       print.mockRestore();
+    });
+  });
+  describe("signing in", () => {
+    it("sends signed-out visitors to the sign-in screen", async () => {
+      fakeServer({ user: null, agreements: [] });
+      render(<DocumentCreator savedId={null} onCreated={vi.fn()} />);
+      await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/"));
+      expect(screen.queryByLabelText("Message")).not.toBeInTheDocument();
+    });
+
+    it("shows who is signed in", async () => {
+      await setup();
+      expect(screen.getByText("Ada Lovelace")).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: "My agreements" })).toHaveAttribute("href", expect.stringMatching(/^\/dashboard\/?$/));
+    });
+  });
+
+  describe("the draft disclaimer", () => {
+    it("is shown above the agreement and printed at the top of it", async () => {
+      const { user, preview } = await setup();
+      expect(screen.getByRole("note")).toHaveTextContent(/This is a draft.*qualified lawyer review it before anyone signs/);
+      await chat(user, { documentId: "sla" });
+      await coverPage(preview, "Service Level Agreement");
+      const notice = within(preview).getByText(/Draft for legal review/);
+      expect(notice.tagName).toBe("EM");
+      expect(notice).toHaveTextContent("Have a qualified lawyer review it before anyone signs it. It is not legal advice.");
+    });
+
+    it("is in the Mutual NDA too", async () => {
+      const { user, preview } = await setup();
+      await chat(user, { documentId: "Mutual-NDA" });
+      await coverPage(preview, "Mutual Non-Disclosure Agreement");
+      expect(within(preview).getByText(/Draft for legal review/)).toBeInTheDocument();
+    });
+  });
+
+  describe("saving", () => {
+    it("doesn't save before a document is chosen", async () => {
+      const { user } = await setup();
+      const fetchMock = await chat(user, {});
+      expect(requestsTo(fetchMock, "/api/agreements")).toEqual([]);
+      expect(screen.queryByText("Saved")).not.toBeInTheDocument();
+    });
+
+    it("saves a new agreement after the first reply that chooses a document, then updates it", async () => {
+      const { user, preview, onCreated } = await setup();
+      const fetchMock = await chat(
+        user,
+        { documentId: "sla", terms: { "Target Uptime": "99.9%" } },
+        { terms: { "Support Channel": "Email" } },
+      );
+      await coverPage(preview, "Service Level Agreement");
+      await waitFor(() => expect(requestsTo(fetchMock, "/api/agreements/1", "PUT")).toHaveLength(1));
+
+      const [created] = requestsTo(fetchMock, "/api/agreements");
+      expect(created.draft.documentId).toBe("sla");
+      expect(created.draft.terms).toEqual({ "Target Uptime": "99.9%" });
+      expect(created.messages.map((m: { content: string }) => m.content)).toEqual([
+        expect.stringMatching(/What kind of agreement/),
+        "Message 1",
+        "Reply 1",
+      ]);
+      expect(onCreated).toHaveBeenCalledWith(1);
+
+      const [updated] = requestsTo(fetchMock, "/api/agreements/1", "PUT");
+      expect(updated.draft.terms).toEqual({ "Target Uptime": "99.9%", "Support Channel": "Email" });
+      expect(updated.messages).toHaveLength(5);
+      expect(requestsTo(fetchMock, "/api/agreements")).toHaveLength(1);
+      expect(await screen.findByText("Saved")).toBeInTheDocument();
+    });
+
+    it("says when saving failed", async () => {
+      const { user, preview } = await setup();
+      const api = fakeApi({ documentId: "sla", reply: "Reply 1" });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn<typeof fetch>(async (input, init) =>
+          String(input) === "/api/agreements" ? new Response("{}", { status: 500 }) : api(input, init),
+        ),
+      );
+      await say(user, "An SLA", "Reply 1");
+      await coverPage(preview, "Service Level Agreement");
+      expect(await screen.findByText(/Not saved\. It will try again after your next message\./)).toBeInTheDocument();
+    });
+  });
+
+  describe("reopening a saved agreement", () => {
+    it("restores the conversation and the agreement, and keeps saving to it", async () => {
+      const fetchMock = fakeServer(
+        { user: ADA, agreements: [savedAgreement(7)] },
+        { reply: "Noted.", terms: { "Uptime Credit": "10%" } },
+      );
+      const { user, preview, onCreated } = await setup({ savedId: 7, fake: false });
+      expect(screen.getByText("Great. What uptime?")).toBeInTheDocument();
+      await coverPage(preview, "Service Level Agreement");
+      expect(row(preview, "Target Uptime")).toEqual(["Target Uptime", "99.9%"]);
+
+      await say(user, "10% credit", "Noted.");
+      await waitFor(() => expect(requestsTo(fetchMock, "/api/agreements/7", "PUT")).toHaveLength(1));
+      const [saved] = requestsTo(fetchMock, "/api/agreements/7", "PUT");
+      expect(saved.draft.terms).toEqual({ "Target Uptime": "99.9%", "Uptime Credit": "10%" });
+      expect(saved.messages).toHaveLength(5);
+      expect(onCreated).not.toHaveBeenCalled();
+      expect(requestsTo(fetchMock, "/api/agreements")).toEqual([]);
+    });
+
+    it("explains when the agreement can't be opened", async () => {
+      fakeServer({ user: ADA, agreements: [] });
+      render(<DocumentCreator savedId={99} onCreated={vi.fn()} />);
+      expect(await screen.findByRole("alert")).toHaveTextContent("Agreement not found.");
     });
   });
 });

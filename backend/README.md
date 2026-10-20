@@ -8,11 +8,22 @@ uv run prelegal-backend   # http://localhost:8000
 uv run pytest
 ```
 
-On startup it creates the SQLite database from scratch (any previous file is deleted), with a `users` table ready for sign up and sign in.
+On startup it creates the SQLite database from scratch (any previous file is deleted), with tables for `users`, sign-in `sessions` and saved `agreements`. Everything is lost when the server restarts.
+
+Passwords are hashed with scrypt (Python's standard library). Signing up or in sets an HttpOnly `prelegal_session` cookie, valid for 30 days or until the server restarts. Every endpoint except health, sign-up, sign-in and sign-out returns 401 without it.
 
 | Endpoint | Description |
 |----------|-------------|
 | `GET /api/health` | `{"status": "ok", "database": "ok"}` when the API and database are up |
+| `POST /api/auth/signup` | `{name, email, password}` (password at least 8 characters). Creates the account and signs in; 409 if the email is already registered |
+| `POST /api/auth/signin` | `{email, password}`. Signs in; 401 "Wrong email or password." otherwise |
+| `POST /api/auth/signout` | Ends the session |
+| `GET /api/auth/me` | The signed-in user, `{id, name, email}`, or 401 |
+| `GET /api/agreements` | The user's saved agreements, most recently edited first: `{id, documentId, title, createdAt, updatedAt}` |
+| `POST /api/agreements` | Saves a new agreement from `{draft, messages}`; the title is built from the document and the parties' companies |
+| `GET /api/agreements/{id}` | One agreement with its `draft` and `messages`; 404 if it isn't the user's |
+| `PUT /api/agreements/{id}` | Replaces its draft and messages |
+| `DELETE /api/agreements/{id}` | Deletes it |
 | `GET /api/documents/{id}` | One of the documents in `catalog.json`: id, name, description, the two party roles, the key terms, and its template as `standardTerms`; 404 for an unknown id |
 | `POST /api/chat` | One turn of the AI chat. Send `{messages, draft, today}`, where `draft` holds the chosen `documentId` (or `null`), both parties, the NDA fields and other documents' key terms. Get back the `reply` (ending with a follow-on question), the `documentId` being drafted (`null` = no change), and party, NDA and key term updates (`null` = no change). Returns 503 if `OPENROUTER_API_KEY` is missing or the OpenRouter account is out of credit, and 502 if the AI call fails. |
 

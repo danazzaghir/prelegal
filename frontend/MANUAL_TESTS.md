@@ -4,15 +4,21 @@ Run these before releasing changes to the document creator. The automated tests 
 
 Start the app with `npm run dev` and open http://localhost:3000, or run the production setup with the start script for your OS in `scripts/` and open http://localhost:8000.
 
-### Login (PL-4)
+### Accounts and saved agreements (PL-4, PL-7)
 
 | # | Area | Steps | Expected result |
 |---|------|-------|-----------------|
-| L1 | Login screen | Open the site | Prelegal login screen with Email, Password and a purple **Sign in** button, and a note that any email and password will do. |
-| L2 | Sign in | Enter any email and password, press **Sign in** (and once with Enter) | You land on the document creator at `/documents/`; your email shows in the header. |
-| L3 | Validation | Press **Sign in** with empty fields, then with `abc` as the email | The browser asks you to fill in the fields / enter a valid email; you stay on the login screen. |
-| L4 | Sign out | Press **Sign out** | Back on the login screen. Opening `/documents/` again shows no email in the header. |
-| L5 | Docker | Run the start script for your OS, then the stop script | Start prints "Prelegal is running at http://localhost:8000" and the site works there; stop prints "Prelegal stopped." and the site is gone. |
+| L1 | Sign-in screen | Open the site | A navy panel with the Prelegal name and the 11 agreements you can draft, and the sign-in form with a purple **Sign in** button and a "Create an account" link. On a phone the panel sits above the form. |
+| L2 | Sign up | Create an account with a name, email and an 8+ character password | You land on **My agreements**, which invites you to start your first agreement. Your name shows in the header. |
+| L3 | Validation | Try a 5-character password, an email that's already registered, then sign in with a wrong password | Clear messages: "Use at least 8 characters…", "An account with this email already exists…", "Wrong email or password." |
+| L4 | Sign out and back in | **Sign out**, open `/dashboard/` directly, then sign in | Signed out, `/dashboard/` and `/documents/` send you to sign in. Signing in brings you back to your agreements. |
+| L5 | Saving | Start a new agreement and chat until a document is chosen | The header shows "Saving…" then "Saved", and the address gains `?id=…`. The chat isn't interrupted. |
+| L6 | My agreements | Open **My agreements** | The agreement is listed with a title like "Cloud Service Agreement · Acme Inc & Globex LLC" and "Draft, last edited just now". |
+| L7 | Continue | Click **Open**, then keep chatting; also reload the page | The conversation and agreement come back; new answers keep saving to the same agreement. |
+| L8 | Delete | Click **Delete**, then **Keep**; then **Delete** and confirm | Keep leaves it; confirming removes it from the list. |
+| L9 | Privacy | Sign up a second account in another browser and open the first account's `/documents/?id=…` | "Agreement not found." The second account's list is empty. |
+| L10 | Restart | Restart Prelegal | Everyone is signed out and all accounts and agreements are gone (by design). |
+| L11 | Docker | Run the start script for your OS, then the stop script | Start prints "Prelegal is running at http://localhost:8000" and the site works there; stop prints "Prelegal stopped." and the site is gone. |
 
 ### Document creator with AI chat (PL-3, PL-5, PL-6)
 
@@ -20,7 +26,7 @@ Open `/documents/` (sign in first, or go there directly). The chat needs `OPENRO
 
 | # | Area | Steps | Expected result |
 |---|------|-------|-----------------|
-| 1 | First load | Open the page | Chat on the left, an empty agreement panel on the right ("Your agreement will appear here…"), stacked on phones. The greeting asks what agreement you need. **Download PDF** is disabled; **Send** is purple. |
+| 1 | First load | Open **New agreement** | The header with My agreements, New agreement, your name and Sign out. Chat on the left; on the right, the yellow-edged notice "This is a draft… have a qualified lawyer review it before anyone signs" and an empty agreement panel ("Your agreement will appear here…"), stacked on phones. The greeting asks what agreement you need. **Download PDF** is disabled; **Send** is purple. |
 | 2 | Choosing | Describe a need without naming a document, e.g. "we sell SaaS to businesses" | The assistant picks a fitting agreement (here the Cloud Service Agreement); the header and agreement panel show it, with a cover page, key terms table, signature table and standard terms. |
 | 3 | Unsupported | Ask for an employment contract, a lease or a will | The assistant says it can't draft that, suggests the closest agreement and asks if you want it. Nothing is chosen until you agree. |
 | 4 | Every document | Over several sessions, ask for each of the 11 agreements by name | Each loads with the right parties (e.g. Customer/Provider, Company/Partner) and key terms; no template markup is visible. |
@@ -32,11 +38,20 @@ Open `/documents/` (sign in first, or go there directly). The chat needs `OPENRO
 | 10 | Chat controls | Shift+Enter for a new line; try to send an empty message | Shift+Enter adds a line; an empty message is not sent. While waiting, "Thinking…" shows and Send is disabled. |
 | 11 | AI unavailable | Remove `OPENROUTER_API_KEY` (or use an account with no credit) and restart, then send a message | A red error explains the problem; your message goes back into the box; the agreement does not change. |
 | 12 | Unsafe input | Ask the assistant to set a key term to `<b>bold</b>` and another to `[x](javascript:alert(1))` | Shown as text; nothing is bolded and no clickable javascript link appears. |
-| 13 | Download PDF | For an NDA and for a long agreement (e.g. the Software License Agreement), click **Download PDF**, choose "Save as PDF", open the file | Only the agreement is included (no chat, header or footer). Cover page first; Standard Terms start on a new page; tables are not split across pages. The CC BY 4.0 attribution is present. |
+| 13 | Download PDF | For an NDA and for a long agreement (e.g. the Software License Agreement), click **Download PDF**, choose "Save as PDF", open the file | Only the agreement is included (no chat, header or footer), starting with the italic "Draft for legal review…" notice under the title. Cover page first; Standard Terms start on a new page; tables are not split across pages. The CC BY 4.0 attribution is present. |
 | 14 | Phone layout | Open on a phone or a 375px-wide window with a long agreement chosen | No sideways scrolling. The chat is a fixed-height box above the agreement and scrolls to the newest message. |
 | 15 | Console | Open browser dev tools while chatting in `npm run dev` | No errors or hydration warnings. |
 
-## Last run (PL-6)
+## Last run (PL-7)
+
+20 October 2026, by Claude Code on the `feature/PL-7-accounts-and-polish` branch:
+
+- Done by inspecting screenshots of the build served by FastAPI (Chromium, desktop 1400px and Pixel 7): L1, L2, L6, and the creator with a saved agreement. Fixed from them: the creator page scrolled when the cursor returned to the message box (it now fits the screen on desktop), the sign-in form floated mid-screen on phones, and long titles were cut off on the dashboard.
+- Covered by automated tests: L2–L9 (component and browser tests, with the AI faked), and the draft notice on screen and in the agreement.
+- The live AI browser tests passed for choosing a CSA and for an unsupported request. The rest could not run: the OpenRouter account ran out of credit.
+- Not yet done by a person: L10, L11, keyboard use and testing in Safari and Firefox.
+
+## Previous run (PL-6)
 
 20 October 2026, by Claude Code on the `feature/PL-6-all-documents` branch:
 

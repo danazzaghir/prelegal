@@ -12,6 +12,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
 
+from prelegal_backend.auth import SignedIn
 from prelegal_backend.models import DocumentOut
 
 NDA_ID = "Mutual-NDA"
@@ -75,7 +76,7 @@ def load_documents(catalog_path: Path, templates_dir: Path) -> dict[str, Documen
     return documents
 
 
-router = APIRouter(prefix="/api")
+router = APIRouter(prefix="/api", dependencies=[SignedIn])
 
 
 @router.get("/documents/{document_id}", response_model=DocumentOut)

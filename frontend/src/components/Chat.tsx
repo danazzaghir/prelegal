@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import { submitClass } from "@/components/ui";
 import { GREETING, sendChat, type ChatMessage, type ChatTurn } from "@/lib/chat";
 import type { Draft } from "@/lib/draft";
 import { todayIso } from "@/lib/nda";
@@ -12,12 +13,17 @@ const NO_IMAGES = ["img"];
 type Props = {
   // The draft as the AI should see it, with defaults filled in.
   draft: Draft;
-  onTurn: (turn: ChatTurn) => void;
+  // A saved conversation to continue; a new chat starts with the greeting.
+  initialMessages?: ChatMessage[];
+  // Called with the AI's turn and the whole conversation, including its reply.
+  onTurn: (turn: ChatTurn, messages: ChatMessage[]) => void;
 };
 
 /** Freeform chat with the AI, which picks the document and fills it in as the user answers. */
-export default function Chat({ draft, onTurn }: Props) {
-  const [messages, setMessages] = useState<ChatMessage[]>([{ role: "assistant", content: GREETING }]);
+export default function Chat({ draft, initialMessages, onTurn }: Props) {
+  const [messages, setMessages] = useState<ChatMessage[]>(
+    () => initialMessages ?? [{ role: "assistant", content: GREETING }],
+  );
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,8 +45,9 @@ export default function Chat({ draft, onTurn }: Props) {
     setPending(true);
     try {
       const turn = await sendChat(history, draft, todayIso());
-      setMessages([...history, { role: "assistant", content: turn.reply }]);
-      onTurn(turn);
+      const conversation: ChatMessage[] = [...history, { role: "assistant", content: turn.reply }];
+      setMessages(conversation);
+      onTurn(turn, conversation);
     } catch (e) {
       // Put the message back so the user can send it again.
       setMessages(messages);
@@ -64,7 +71,7 @@ export default function Chat({ draft, onTurn }: Props) {
   return (
     <section
       aria-label="Chat with the Prelegal assistant"
-      className="flex h-[32rem] flex-col rounded-lg border border-slate-200 bg-white shadow-sm lg:sticky lg:top-6 lg:h-[calc(100vh-3rem)] print:hidden"
+      className="flex h-[32rem] flex-col rounded-lg border border-slate-200 bg-white shadow-sm lg:h-auto lg:min-h-0 print:hidden"
     >
       <ol ref={listRef} aria-label="Conversation" aria-live="polite" className="flex-1 space-y-3 overflow-y-auto p-4">
         {messages.map((message, i) => (
@@ -120,7 +127,7 @@ export default function Chat({ draft, onTurn }: Props) {
         <button
           type="submit"
           disabled={pending || !input.trim()}
-          className="rounded-md bg-[#753991] px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-[#62307a] focus:outline-none focus:ring-2 focus:ring-[#753991] focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className={submitClass}
         >
           Send
         </button>

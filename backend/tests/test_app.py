@@ -124,3 +124,15 @@ def test_settings_do_not_override_real_environment_variables(monkeypatch, tmp_pa
     monkeypatch.setenv("OPENROUTER_API_KEY", "from-environment")
     Settings.from_env()
     assert os.environ["OPENROUTER_API_KEY"] == "from-environment"
+
+def test_serves_prefetch_data_under_the_name_next_js_asks_for(client):
+    response = client.get("/documents/__next.documents.__PAGE__.txt?_rsc=abc")
+    assert response.status_code == 200
+    assert response.text == "documents page data"
+    # The name it is written under still works too.
+    assert client.get("/documents/__next.documents/__PAGE__.txt").status_code == 200
+
+
+def test_missing_prefetch_data_is_still_a_404(client):
+    assert client.get("/documents/__next.other.__PAGE__.txt").status_code == 404
+    assert client.get("/documents/__next.txt").status_code == 404

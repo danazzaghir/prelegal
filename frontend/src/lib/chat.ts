@@ -1,3 +1,4 @@
+import { api } from "@/lib/api";
 import type { Draft, NdaTerms } from "@/lib/draft";
 import type { Party } from "@/lib/nda";
 
@@ -29,23 +30,5 @@ export const GREETING =
   "What kind of agreement do you need, and who is it between?";
 
 /** Sends the conversation and current draft; resolves to the AI's reply and updates. */
-export async function sendChat(messages: ChatMessage[], draft: Draft, today: string): Promise<ChatTurn> {
-  let response: Response;
-  try {
-    response = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages, draft, today }),
-    });
-  } catch {
-    throw new Error("Couldn't reach Prelegal. Check your connection and try again.");
-  }
-  if (!response.ok) {
-    const detail = await response
-      .json()
-      .then((body) => (typeof body?.detail === "string" ? body.detail : null))
-      .catch(() => null);
-    throw new Error(detail ?? "Something went wrong. Please try again.");
-  }
-  return (await response.json()) as ChatTurn;
-}
+export const sendChat = (messages: ChatMessage[], draft: Draft, today: string) =>
+  api<ChatTurn>("/api/chat", { method: "POST", body: { messages, draft, today } });

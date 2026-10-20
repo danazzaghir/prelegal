@@ -1,11 +1,4 @@
-import type { Metadata } from "next";
-import DocumentCreator from "@/components/DocumentCreator";
-
-export const metadata: Metadata = {
-  title: "Document Creator · Prelegal",
-  description: "Draft a legal agreement from Common Paper's standard templates by chatting with an AI assistant.",
-};
-
+// Everything on /documents/ is rendered by the layout; see layout.tsx for why.
 export default function DocumentsPage() {
-  return <DocumentCreator />;
+  return null;
 }
