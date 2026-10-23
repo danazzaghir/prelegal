@@ -8,7 +8,7 @@ The available documents are covered in the catalog.json file in the project root
 
 @catalog.json
 
-The current implementation supports all 11 documents in the catalog via AI chat, or a form when the AI is unavailable, with real accounts and saved agreements (reset when the server restarts). PL-2 to PL-7 are Done and merged into `main`; PL-8 (manual editing) is in progress on `feature/PL-8-manual-editing`.
+The current implementation supports all 11 documents in the catalog via AI chat, or a form when the AI is unavailable, with real accounts and saved agreements (reset when the server restarts). All Jira tickets (PL-2 to PL-8) are Done and merged into `main`; there is no open work in Jira.
 
 ## Development process
 
@@ -63,8 +63,6 @@ Backend available at http://localhost:8000
 - PL-5: AI chat replaces the NDA form. `POST /api/chat` calls gpt-oss-120b via LiteLLM/OpenRouter (Cerebras) with Structured Outputs and returns a reply plus field updates; the conversation lives in the browser only
 - PL-6: all 11 documents. The backend reads parties and key terms from the template markup (`documents.py`, `GET /api/documents/{id}`); the AI picks the document (or suggests the closest one), always asks a follow-on question, and fills in key terms; the page is `/documents/`. The NDA keeps its own cover page; other documents get a key terms table
 - PL-7: real accounts (`auth.py`: scrypt-hashed passwords, an HttpOnly session cookie; `/api/auth/signup`, `signin`, `signout`, `me`), sign-in required for every API except health; saved agreements (`agreements.py`, `/api/agreements`), auto-saved after each chat reply and listed on `/dashboard/`, reopened at `/documents/?id=N`; a draft notice above the agreement and at the top of every cover page (so in every PDF); polished sign-in, sign-up, dashboard and creator screens with a shared header
-
-### In progress
 - PL-8: when the AI can't help, users fill in the agreement by hand. A "Chat / Edit manually" switch on the creator (`ManualForm.tsx`); a 502/503 from `/api/chat` offers "Fill it in yourself"; the form lists documents from `catalog.json` and edits the draft with helpers in `draft.ts` (which can clear a field); manual edits are auto-saved 800 ms after the last change, or at once when leaving the page; switching document after filling things in asks first. Frontend only.
 
 ### How the AI chat works (backend)
