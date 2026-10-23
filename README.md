@@ -9,8 +9,9 @@ Prelegal fills in [Common Paper](https://commonpaper.com) standard agreements wi
 Early development. Today Prelegal has:
 
 - **AI document creator**: tell the assistant what you need. It picks the right Common Paper agreement (or suggests the closest one if it can't draft what you asked for), asks about the parties and terms, fills in the agreement as you answer, and you download it as a PDF. All 11 agreements below are supported.
+- **Fill it in yourself**: if the AI assistant is unavailable (for example the OpenRouter account is out of credit), or you'd rather type, switch to **Edit manually** and choose the agreement and fill in its fields in a form. The agreement updates as you type and is saved the same way.
 - **Accounts**: sign up with your name, email and password, and sign in again later. Everything except the sign-in and sign-up pages needs an account.
-- **My agreements**: every agreement is saved as you chat. Come back to it from the dashboard to keep chatting or download it again.
+- **My agreements**: every agreement is saved as you chat or edit. Come back to it from the dashboard to keep chatting or download it again.
 - **Draft notice**: each agreement says it is a draft for a qualified lawyer to review, on screen and in the PDF.
 - **Foundation**: FastAPI backend, SQLite database, Docker packaging and start/stop scripts.
 
@@ -57,8 +58,9 @@ Before doing anything, both scripts show the container they will affect and what
 
 1. Open http://localhost:8000 and create an account (or sign in).
 2. On **My agreements**, click **New agreement**. In the document creator, chat with the assistant: say what agreement you need and who it's between, then answer its questions. The agreement on the right updates after each answer; fields still blank show a line to fill in by hand. You can ask for a different agreement at any time, which starts a fresh draft. Press Enter to send, Shift+Enter for a new line.
+   - To fill it in by hand instead, click **Edit manually** above the chat (or **Fill it in yourself** in the message shown when the assistant is unavailable). Choose the agreement type, then fill in both parties and the key terms. Choosing a different agreement after filling things in asks first, then starts a fresh draft. You can switch back to the chat at any time; the assistant sees what you typed.
 3. Click **Download PDF** and choose "Save as PDF" in the print dialog. The PDF has only the agreement: the cover page (key terms and signatures), then the Standard Terms on a new page.
-4. Your agreement is saved after every reply (the header shows "Saved"). It appears on **My agreements**, where you can open it to keep chatting, or delete it.
+4. Your agreement is saved after every reply, and shortly after you stop typing in the form (the header shows "Saved"). It appears on **My agreements**, where you can open it to keep chatting, or delete it.
 5. Click **Sign out** when you are done.
 
 ## Project layout

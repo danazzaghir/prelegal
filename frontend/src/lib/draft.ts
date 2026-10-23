@@ -103,3 +103,39 @@ export function applyTurn(draft: Draft, turn: ChatTurn): Draft {
     terms,
   };
 }
+
+// Manual edits. Unlike the AI's updates, these can clear a field.
+
+/** Whether anything has been filled in beyond a fresh draft's defaults. */
+export function hasDetails(draft: Draft): boolean {
+  const { party1, party2, nda, terms } = emptyDraft();
+  return (
+    JSON.stringify([draft.party1, draft.party2, draft.nda, draft.terms]) !== JSON.stringify([party1, party2, nda, terms])
+  );
+}
+
+/** Chooses a document by hand. The first choice keeps any details given; switching starts afresh, as with the AI. */
+export function chooseDocument(draft: Draft, documentId: string): Draft {
+  if (documentId === draft.documentId) return draft;
+  return draft.documentId === null ? { ...draft, documentId } : emptyDraft(documentId);
+}
+
+export type PartyKey = "party1" | "party2";
+
+export const setPartyField = (draft: Draft, party: PartyKey, field: keyof Party, value: string): Draft => ({
+  ...draft,
+  [party]: { ...draft[party], [field]: value },
+});
+
+export const setNdaField = <K extends keyof NdaTerms>(draft: Draft, field: K, value: NdaTerms[K]): Draft => ({
+  ...draft,
+  nda: { ...draft.nda, [field]: value },
+});
+
+/** Sets a key term; an empty value removes it, so the agreement shows a blank line again. */
+export function setTerm(draft: Draft, term: string, value: string): Draft {
+  const terms = { ...draft.terms };
+  if (value) terms[term] = value;
+  else delete terms[term];
+  return { ...draft, terms };
+}

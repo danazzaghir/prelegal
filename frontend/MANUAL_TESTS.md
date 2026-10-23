@@ -42,7 +42,28 @@ Open `/documents/` (sign in first, or go there directly). The chat needs `OPENRO
 | 14 | Phone layout | Open on a phone or a 375px-wide window with a long agreement chosen | No sideways scrolling. The chat is a fixed-height box above the agreement and scrolls to the newest message. |
 | 15 | Console | Open browser dev tools while chatting in `npm run dev` | No errors or hydration warnings. |
 
-## Last run (PL-7)
+### Filling it in by hand (PL-8)
+
+| # | Check | Steps | Expected |
+|---|-------|-------|----------|
+| M1 | AI unavailable | With the OpenRouter account out of credit (or no key in `.env`), send a chat message | The red message says the assistant is unavailable and ends "You can still fill in the agreement yourself. **Fill it in yourself**". The button opens the form. |
+| M2 | Switch | Click **Edit manually**, then **Chat** | The form replaces the chat and back; the conversation is still there. The selected button is blue. |
+| M3 | Choose and fill in | Choose an agreement type, fill in both parties and some key terms | The agreement on the right updates as you type; the page title and Download PDF follow the chosen document. Party sections are named after the document's roles (e.g. Customer, Provider). |
+| M4 | Mutual NDA | Choose the Mutual NDA; change the MNDA term, term of confidentiality, effective date, governing law and jurisdiction | Its own cover page updates to match. |
+| M5 | Saving | Type, then stop | "Saving…" then "Saved" in the header about a second later, and the address gains `?id=…`; reload and the details come back. |
+| M6 | Switch document | After filling things in, choose a different agreement | A confirmation asks first. Cancel keeps everything; OK starts a fresh draft. No question if nothing was filled in. |
+| M7 | Back to the AI | With credit, fill in some fields by hand, then go back to the chat | The assistant knows what you filled in. |
+| M8 | Phone layout | Repeat M3 on a phone | The form sits above the agreement; no sideways scrolling. |
+
+## Last run (PL-8)
+
+23 October 2026, by Claude Code on the `feature/PL-8-manual-editing` branch:
+
+- Covered by automated tests: M1 (component tests for 502 and both 503s, and a browser test), M2, M3, M4, M5 (including saving at once when the page is left), M6 (component tests); M3 and M5 also end to end in a browser test (desktop and Pixel 7), with the AI faked as out of credit.
+- Done by inspecting screenshots of the build served by FastAPI (Chromium, desktop 1400px and Pixel 7): M1, M3, M4, M8.
+- Not yet done by a person: M7 (needs OpenRouter credit), keyboard use, and testing in Safari and Firefox.
+
+## Previous run (PL-7)
 
 20 October 2026, by Claude Code on the `feature/PL-7-accounts-and-polish` branch:
 

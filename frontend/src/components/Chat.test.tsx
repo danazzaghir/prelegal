@@ -9,8 +9,9 @@ import Chat from "./Chat";
 function setup() {
   const user = userEvent.setup();
   const onTurn = vi.fn();
-  render(<Chat draft={emptyDraft("sla")} onTurn={onTurn} />);
-  return { user, onTurn, message: screen.getByLabelText("Message"), send: screen.getByRole("button", { name: "Send" }) };
+  const onFillInManually = vi.fn();
+  render(<Chat draft={emptyDraft("sla")} onTurn={onTurn} onFillInManually={onFillInManually} />);
+  return { user, onTurn, onFillInManually, message: screen.getByLabelText("Message"), send: screen.getByRole("button", { name: "Send" }) };
 }
 
 const bubbles = () =>
@@ -79,7 +80,7 @@ describe("Chat", () => {
       { role: "user" as const, content: "99.9%" },
       { role: "assistant" as const, content: "Anything else?" },
     ];
-    render(<Chat draft={emptyDraft("sla")} initialMessages={saved} onTurn={vi.fn()} />);
+    render(<Chat draft={emptyDraft("sla")} initialMessages={saved} onTurn={vi.fn()} onFillInManually={vi.fn()} />);
     expect(bubbles()).toEqual(["Which uptime?", "99.9%", "Anything else?"]);
     await user.type(screen.getByLabelText("Message"), "No{Enter}");
     await screen.findByText("Done.");
@@ -202,5 +203,29 @@ describe("Chat", () => {
     await user.type(message, "hi{Enter}");
     await screen.findByText(/See/);
     expect(document.querySelector("img")).toBeNull();
+  });
+
+  describe("when the AI can't help", () => {
+    it.each([
+      [503, "The AI assistant is unavailable: the OpenRouter account is out of credit."],
+      [503, "AI chat is not set up: OPENROUTER_API_KEY is missing."],
+      [502, "The AI assistant didn't respond. Please try again."],
+    ])("offers to fill in the agreement by hand after a %i", async (status, detail) => {
+      fakeApi({ status, detail });
+      const { user, message, onFillInManually } = setup();
+      await user.type(message, "An SLA{Enter}");
+      const alert = await screen.findByRole("alert");
+      expect(alert).toHaveTextContent(detail);
+      await user.click(within(alert).getByRole("button", { name: "Fill it in yourself" }));
+      expect(onFillInManually).toHaveBeenCalledOnce();
+    });
+
+    it("doesn't offer it for other errors, such as an unreachable server", async () => {
+      vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+      const { user, message } = setup();
+      await user.type(message, "An SLA{Enter}");
+      expect(await screen.findByRole("alert")).toHaveTextContent("Couldn't reach Prelegal");
+      expect(screen.queryByRole("button", { name: "Fill it in yourself" })).not.toBeInTheDocument();
+    });
   });
 });

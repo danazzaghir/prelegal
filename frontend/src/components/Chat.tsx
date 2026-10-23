@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { submitClass } from "@/components/ui";
+import { ApiError } from "@/lib/api";
 import { GREETING, sendChat, type ChatMessage, type ChatTurn } from "@/lib/chat";
 import type { Draft } from "@/lib/draft";
 import { todayIso } from "@/lib/nda";
@@ -17,16 +18,22 @@ type Props = {
   initialMessages?: ChatMessage[];
   // Called with the AI's turn and the whole conversation, including its reply.
   onTurn: (turn: ChatTurn, messages: ChatMessage[]) => void;
+  // Switches to filling in the agreement by hand; offered when the AI is unavailable.
+  onFillInManually: () => void;
 };
 
+// The backend's answers when the AI can't help: out of credit or not set up
+// (503), or no usable reply (502).
+const aiUnavailable = (e: unknown) => e instanceof ApiError && (e.status === 502 || e.status === 503);
+
 /** Freeform chat with the AI, which picks the document and fills it in as the user answers. */
-export default function Chat({ draft, initialMessages, onTurn }: Props) {
+export default function Chat({ draft, initialMessages, onTurn, onFillInManually }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>(
     () => initialMessages ?? [{ role: "assistant", content: GREETING }],
   );
   const [input, setInput] = useState("");
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ message: string; aiUnavailable: boolean } | null>(null);
   const listRef = useRef<HTMLOListElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -53,7 +60,10 @@ export default function Chat({ draft, initialMessages, onTurn }: Props) {
       setMessages(messages);
       // Keep anything typed while waiting; otherwise restore the failed message.
       setInput((current) => current || text);
-      setError(e instanceof Error ? e.message : "Something went wrong. Please try again.");
+      setError({
+        message: e instanceof Error ? e.message : "Something went wrong. Please try again.",
+        aiUnavailable: aiUnavailable(e),
+      });
     } finally {
       setPending(false);
       // Ready for the next answer, even if Send was clicked rather than Enter pressed.
@@ -71,7 +81,7 @@ export default function Chat({ draft, initialMessages, onTurn }: Props) {
   return (
     <section
       aria-label="Chat with the Prelegal assistant"
-      className="flex h-[32rem] flex-col rounded-lg border border-slate-200 bg-white shadow-sm lg:h-auto lg:min-h-0 print:hidden"
+      className="flex h-[32rem] flex-col rounded-lg border border-slate-200 bg-white shadow-sm lg:h-auto lg:min-h-0 lg:flex-1 print:hidden"
     >
       <ol ref={listRef} aria-label="Conversation" aria-live="polite" className="flex-1 space-y-3 overflow-y-auto p-4">
         {messages.map((message, i) => (
@@ -102,9 +112,17 @@ export default function Chat({ draft, initialMessages, onTurn }: Props) {
       </ol>
 
       {error && (
-        <p role="alert" className="mx-4 mb-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
-          {error}
-        </p>
+        <div role="alert" className="mx-4 mb-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">
+          <p>{error.message}</p>
+          {error.aiUnavailable && (
+            <p className="mt-1">
+              You can still fill in the agreement yourself.{" "}
+              <button type="button" onClick={onFillInManually} className="font-medium underline hover:text-red-900">
+                Fill it in yourself
+              </button>
+            </p>
+          )}
+        </div>
       )}
 
       <form
