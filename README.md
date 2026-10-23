@@ -51,6 +51,8 @@ Prelegal runs as a single Docker container: the FastAPI backend serves the API a
 
 The start script builds the image, starts the container and waits until it is ready. The SQLite database lives inside the container and is created from scratch every time it starts, so stopping Prelegal discards all data.
 
+Before doing anything, both scripts show the container they will affect and what data will be lost (for example "2 accounts and 5 saved agreements"), then ask `[y/N]`. Anything but `y` or `yes` cancels without changing anything. To skip the question (for automation), pass `--yes` (or `-y`) on Mac/Linux, or `-Yes` on Windows. Without a terminal to ask, the scripts refuse to continue unless that flag is given.
+
 ## Usage
 
 1. Open http://localhost:8000 and create an account (or sign in).
