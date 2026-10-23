@@ -1,5 +1,7 @@
 "use client";
 
+import { useId } from "react";
+
 /** Shared styles and small building blocks for buttons and forms. */
 
 export const inputClass =
@@ -14,21 +16,59 @@ export const primaryButtonClass = `${buttonBase} bg-[#209dd7] hover:bg-[#1a86b8]
 /** Buttons that submit a form, such as Sign in and Send (purple secondary). */
 export const submitClass = `${buttonBase} bg-[#753991] hover:bg-[#62307a] focus:ring-[#753991]`;
 
-type TextFieldProps = {
-  label: string;
-  hint?: string;
-  value: string;
-  onChange: (value: string) => void;
-} & Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "className">;
+type FieldProps = { label: string; hint?: string; value: string; onChange: (value: string) => void };
+
+/** A label above a control, with an optional hint below that describes it (rather than being part of its label). */
+function Field({ label, hint, children }: { label: string; hint?: string; children: (hintId?: string) => React.ReactNode }) {
+  const hintId = useId();
+  return (
+    <div className="space-y-1">
+      <label className="block space-y-1">
+        <span className="text-sm font-medium text-slate-800">{label}</span>
+        {children(hint ? hintId : undefined)}
+      </label>
+      {hint && (
+        <p id={hintId} className="text-xs text-[#888888]">
+          {hint}
+        </p>
+      )}
+    </div>
+  );
+}
+
+type TextFieldProps = FieldProps & Omit<React.InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "className">;
 
 /** A labelled text input, with an optional hint below it. */
 export function TextField({ label, hint, value, onChange, ...input }: TextFieldProps) {
   return (
-    <label className="block space-y-1">
-      <span className="text-sm font-medium text-slate-800">{label}</span>
-      <input {...input} className={inputClass} value={value} onChange={(e) => onChange(e.target.value)} />
-      {hint && <span className="block text-xs text-[#888888]">{hint}</span>}
-    </label>
+    <Field label={label} hint={hint}>
+      {(hintId) => (
+        <input
+          {...input}
+          aria-describedby={hintId}
+          className={inputClass}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )}
+    </Field>
+  );
+}
+
+/** Like TextField, for longer text. */
+export function TextAreaField({ label, hint, value, onChange }: FieldProps) {
+  return (
+    <Field label={label} hint={hint}>
+      {(hintId) => (
+        <textarea
+          rows={3}
+          aria-describedby={hintId}
+          className={inputClass}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        />
+      )}
+    </Field>
   );
 }
 

@@ -1,7 +1,19 @@
 import { describe, expect, it } from "vitest";
 import type { NdaUpdates } from "@/lib/chat";
 import { DOCUMENTS, noNdaUpdates, turn } from "@/test-utils/fakeBackend";
-import { applyNdaUpdates, applyTurn, emptyDraft, ndaData, withDefaults, type Draft } from "./draft";
+import {
+  applyNdaUpdates,
+  applyTurn,
+  chooseDocument,
+  emptyDraft,
+  hasDetails,
+  ndaData,
+  setNdaField,
+  setPartyField,
+  setTerm,
+  withDefaults,
+  type Draft,
+} from "./draft";
 import { defaultNdaData } from "./nda";
 
 const nda = emptyDraft("Mutual-NDA");
@@ -159,5 +171,60 @@ describe("withDefaults", () => {
 
   it("adds no Effective Date to documents without one", () => {
     expect(withDefaults(sla, DOCUMENTS.sla, today).terms).toEqual({});
+  });
+});
+
+describe("manual edits", () => {
+  it("hasDetails is false for a fresh draft, whatever the document", () => {
+    expect(hasDetails(emptyDraft())).toBe(false);
+    expect(hasDetails(sla)).toBe(false);
+    expect(hasDetails(nda)).toBe(false);
+  });
+
+  it("hasDetails notices a party, an NDA field or a key term", () => {
+    expect(hasDetails(setPartyField(sla, "party2", "company", "Acme"))).toBe(true);
+    expect(hasDetails(setNdaField(nda, "governingLaw", "Delaware"))).toBe(true);
+    expect(hasDetails(setTerm(sla, "Target Uptime", "99.9%"))).toBe(true);
+  });
+
+  it("chooseDocument keeps details given before the first choice", () => {
+    const before = setPartyField(emptyDraft(), "party1", "name", "Ada");
+    expect(chooseDocument(before, "sla")).toEqual({ ...before, documentId: "sla" });
+  });
+
+  it("chooseDocument starts afresh when switching, and changes nothing for the same document", () => {
+    const filled = setTerm(sla, "Target Uptime", "99.9%");
+    expect(chooseDocument(filled, "Mutual-NDA")).toEqual(emptyDraft("Mutual-NDA"));
+    expect(chooseDocument(filled, "sla")).toBe(filled);
+  });
+
+  it("setPartyField changes one field of one party, keeping text as typed", () => {
+    const next = setPartyField(sla, "party1", "title", "CEO ");
+    expect(next.party1).toEqual({ ...sla.party1, title: "CEO " });
+    expect(next.party2).toEqual(sla.party2);
+  });
+
+  it("setPartyField can clear a field", () => {
+    const named = setPartyField(sla, "party1", "name", "Ada");
+    expect(setPartyField(named, "party1", "name", "").party1.name).toBe("");
+  });
+
+  it("setNdaField sets any NDA field, including clearing one", () => {
+    expect(setNdaField(nda, "mndaTermYears", 3).nda.mndaTermYears).toBe(3);
+    expect(setNdaField(nda, "mndaTermType", "untilTerminated").nda.mndaTermType).toBe("untilTerminated");
+    expect(setNdaField(nda, "purpose", "").nda.purpose).toBe("");
+  });
+
+  it("setTerm sets a key term and removes it when emptied", () => {
+    const set = setTerm(sla, "Target Uptime", "99.9%");
+    expect(set.terms).toEqual({ "Target Uptime": "99.9%" });
+    expect(setTerm(set, "Target Uptime", "").terms).toEqual({});
+  });
+
+  it("doesn't change the draft it is given", () => {
+    const draft = emptyDraft("sla");
+    setTerm(draft, "Target Uptime", "99.9%");
+    setPartyField(draft, "party1", "name", "Ada");
+    expect(draft).toEqual(emptyDraft("sla"));
   });
 });

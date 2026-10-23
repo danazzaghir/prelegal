@@ -5,18 +5,19 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import AppHeader from "@/components/AppHeader";
 import Chat from "@/components/Chat";
+import ManualForm from "@/components/ManualForm";
 import { primaryButtonClass } from "@/components/ui";
 import { buildDocumentMarkdown } from "@/lib/agreement";
 import { createAgreement, getAgreement, updateAgreement } from "@/lib/agreements";
 import { useRequiredUser } from "@/lib/auth";
-import type { ChatMessage, ChatTurn } from "@/lib/chat";
-import { fetchDocument, NDA_ID, type DocumentDetail } from "@/lib/documents";
-import { applyTurn, emptyDraft, ndaData, withDefaults, type Draft } from "@/lib/draft";
+import { GREETING, type ChatMessage, type ChatTurn } from "@/lib/chat";
+import { DOCUMENT_CHOICES, fetchDocument, NDA_ID, type DocumentDetail } from "@/lib/documents";
+import { applyTurn, chooseDocument, emptyDraft, hasDetails, ndaData, withDefaults, type Draft } from "@/lib/draft";
 import { buildNdaMarkdown, todayIso } from "@/lib/nda";
 
 const noopSubscribe = () => () => {};
 
-// Values in the agreement come from the chat, so an image URL in one could send
+// Values in the agreement come from the chat or the form, so an image URL in one could send
 // its contents elsewhere when rendered.
 const NO_IMAGES = ["img"];
 
@@ -41,8 +42,18 @@ const SAVE_LABELS: Record<SaveStatus, string> = {
   idle: "",
   saving: "Saving…",
   saved: "Saved",
-  failed: "Not saved. It will try again after your next message.",
+  failed: "Not saved. It will try again after your next change.",
 };
+
+// Manual edits are saved this long after the last one, not on every keystroke.
+const EDIT_SAVE_DELAY_MS = 800;
+
+type Mode = "chat" | "manual";
+
+const MODES: { mode: Mode; label: string }[] = [
+  { mode: "chat", label: "Chat" },
+  { mode: "manual", label: "Edit manually" },
+];
 
 type Props = {
   // The saved agreement to continue, or null for a new one.
@@ -52,8 +63,9 @@ type Props = {
 };
 
 /**
- * The chat and the live agreement. Once a document is chosen, the agreement is
- * saved after every reply.
+ * The chat (or a form to fill it in by hand) and the live agreement. Once a
+ * document is chosen, the agreement is saved after every reply and shortly
+ * after each manual edit.
  */
 export default function DocumentCreator({ savedId, onCreated }: Props) {
   const user = useRequiredUser();
@@ -66,12 +78,17 @@ export default function DocumentCreator({ savedId, onCreated }: Props) {
   const [openError, setOpenError] = useState<string | null>(null);
   // Documents fetched so far, by id; switching back to one needs no new request.
   const [documents, setDocuments] = useState<Record<string, DocumentDetail>>({});
-  // Why a document couldn't be loaded, by id. Cleared on the next chat turn, which retries.
+  // Why a document couldn't be loaded, by id. Cleared on the next chat turn or document choice, which retries.
   const [loadErrors, setLoadErrors] = useState<Record<string, string>>({});
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [mode, setMode] = useState<Mode>("chat");
   const agreementId = useRef(savedId);
   // Saves run one after another, so a quick second reply can't create a duplicate.
   const saves = useRef<Promise<void>>(Promise.resolve());
+  // The conversation so far, saved along with manual edits.
+  const conversation = useRef<ChatMessage[]>([{ role: "assistant", content: GREETING }]);
+  // A manual edit waiting to be saved, and its timer.
+  const pendingEdit = useRef<{ draft: Draft; timer: ReturnType<typeof setTimeout> } | null>(null);
 
   useEffect(() => {
     if (openedId === null || !user) return;
@@ -81,6 +98,7 @@ export default function DocumentCreator({ savedId, onCreated }: Props) {
         if (cancelled) return;
         setAnswers(agreement.draft);
         setInitialMessages(agreement.messages);
+        conversation.current = agreement.messages;
         setOpening(false);
       })
       .catch((e: unknown) => {
@@ -117,6 +135,9 @@ export default function DocumentCreator({ savedId, onCreated }: Props) {
   const draft = withDefaults(answers, doc, today);
 
   const save = (toSave: Draft, messages: ChatMessage[]) => {
+    // This save includes any manual edit still waiting.
+    if (pendingEdit.current) clearTimeout(pendingEdit.current.timer);
+    pendingEdit.current = null;
     setSaveStatus("saving");
     saves.current = saves.current.then(async () => {
       try {
@@ -135,12 +156,42 @@ export default function DocumentCreator({ savedId, onCreated }: Props) {
     });
   };
 
+  const saveEditNow = () => {
+    if (pendingEdit.current) save(pendingEdit.current.draft, conversation.current);
+  };
+  // The timer and the unmount below need the latest saveEditNow.
+  const latestSaveEditNow = useRef(saveEditNow);
+  useEffect(() => {
+    latestSaveEditNow.current = saveEditNow;
+  });
+  // Leaving the page (for example back to the dashboard) saves a waiting edit at once.
+  useEffect(() => () => latestSaveEditNow.current(), []);
+
   const onTurn = (turn: ChatTurn, messages: ChatMessage[]) => {
     const next = applyTurn(answers, turn);
+    conversation.current = messages;
     setLoadErrors({});
     setAnswers(next);
     // Nothing worth keeping until the assistant has chosen a document.
     if (next.documentId) save(next, messages);
+  };
+
+  const onEdit = (change: (draft: Draft) => Draft) => {
+    const next = change(answers);
+    setAnswers(next);
+    if (pendingEdit.current) clearTimeout(pendingEdit.current.timer);
+    pendingEdit.current = next.documentId
+      ? { draft: next, timer: setTimeout(() => latestSaveEditNow.current(), EDIT_SAVE_DELAY_MS) }
+      : null;
+  };
+
+  const onChooseDocument = (id: string) => {
+    if (answers.documentId && id !== answers.documentId && hasDetails(answers)) {
+      const name = DOCUMENT_CHOICES.find((choice) => choice.id === id)?.name ?? "this agreement";
+      if (!window.confirm(`Switch to the ${name}? The details filled in so far will be cleared.`)) return;
+    }
+    setLoadErrors({});
+    onEdit((d) => chooseDocument(d, id));
   };
 
   if (!user) return <div className="min-h-screen bg-slate-100" aria-busy="true" />;
@@ -176,7 +227,39 @@ export default function DocumentCreator({ savedId, onCreated }: Props) {
             Opening your agreement…
           </p>
         ) : (
-          <Chat draft={draft} initialMessages={initialMessages} onTurn={onTurn} />
+          <div className="flex min-w-0 flex-col gap-3 lg:min-h-0 print:hidden">
+            <div
+              role="group"
+              aria-label="How to fill in the agreement"
+              className="inline-flex self-start rounded-md border border-slate-200 bg-white p-0.5 shadow-sm"
+            >
+              {MODES.map((m) => (
+                <button
+                  key={m.mode}
+                  type="button"
+                  aria-pressed={mode === m.mode}
+                  onClick={() => setMode(m.mode)}
+                  className={`rounded px-3 py-1.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#209dd7] ${
+                    mode === m.mode ? "bg-[#209dd7] text-white" : "text-slate-700 hover:bg-slate-100"
+                  }`}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            {/* The chat stays mounted while hidden, so its conversation isn't lost. */}
+            <div hidden={mode !== "chat"} className="flex flex-col lg:min-h-0 lg:flex-1">
+              <Chat
+                draft={draft}
+                initialMessages={initialMessages}
+                onTurn={onTurn}
+                onFillInManually={() => setMode("manual")}
+              />
+            </div>
+            {mode === "manual" && (
+              <ManualForm draft={draft} doc={doc} onEdit={onEdit} onChooseDocument={onChooseDocument} />
+            )}
+          </div>
         )}
 
         <div className="min-w-0 lg:flex lg:min-h-0 lg:flex-col print:block">
@@ -200,7 +283,7 @@ export default function DocumentCreator({ savedId, onCreated }: Props) {
             ) : documentId ? (
               <Placeholder>Loading the agreement…</Placeholder>
             ) : (
-              <Placeholder>Your agreement will appear here once you and the assistant have chosen one.</Placeholder>
+              <Placeholder>Your agreement will appear here once you have chosen one, with the assistant or by hand.</Placeholder>
             )}
           </article>
         </div>

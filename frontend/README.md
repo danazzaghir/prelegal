@@ -4,7 +4,7 @@ Next.js app for Prelegal. Its pages:
 
 - `/` and `/signup/`: sign in and create an account (Jira PL-7).
 - `/dashboard/`: **My agreements**, the user's saved agreements, with New agreement, Open and Delete.
-- `/documents/`: the **document creator** (Jira PL-3, PL-5, PL-6): chat with an AI assistant, which picks one of the 11 Common Paper agreements (or suggests the closest one) and fills it in as you answer. The agreement updates live next to the chat and downloads as a PDF. It is saved after every reply; `/documents/?id=3` reopens a saved one.
+- `/documents/`: the **document creator** (Jira PL-3, PL-5, PL-6): chat with an AI assistant, which picks one of the 11 Common Paper agreements (or suggests the closest one) and fills it in as you answer. The agreement updates live next to the chat and downloads as a PDF. **Edit manually** (Jira PL-8) fills it in with a form instead, for when the AI is unavailable. It is saved after every reply and shortly after manual edits; `/documents/?id=3` reopens a saved one.
 
 The app is built as a static export (`output: "export"` in `next.config.ts`): `npm run build` writes plain HTML, CSS and JS to `out/`, which the FastAPI backend in `../backend` serves in production.
 
@@ -34,6 +34,7 @@ Then open http://localhost:3000. The chat needs the backend: run `uv run prelega
 - `src/lib/agreements.ts` saves and loads agreements; `src/components/Dashboard.tsx` lists them.
 - `src/app/documents/layout.tsx` renders `src/components/DocumentCreator.tsx` (through `DocumentsRoute.tsx`, which decides when to start afresh): the chat (`Chat.tsx`) on one side and a live preview of the agreement on the other.
 - Each chat turn sends the conversation and the current draft to `POST /api/chat` (`src/lib/chat.ts`). `src/lib/draft.ts` applies the AI's answer: the chosen document, party details and field values. Switching documents starts a fresh draft.
+- **Edit manually** shows `ManualForm.tsx` in place of the chat (which stays mounted, hidden, so its conversation is kept). The form lists the documents from `catalog.json` (`DOCUMENT_CHOICES` in `src/lib/documents.ts`) and edits the draft through the helpers at the end of `src/lib/draft.ts`, which, unlike the AI's updates, can clear a field. `DocumentCreator` saves manual edits 800 ms after the last change, or at once when the page is left. When `/api/chat` answers 502 or 503 (the AI is out of credit, not set up or didn't respond), the chat's error offers **Fill it in yourself**.
 - When a document is chosen, its template comes from `GET /api/documents/{id}` (`src/lib/documents.ts`). The Mutual NDA keeps its own cover page (`src/lib/nda.ts`); other documents get a key terms cover page (`src/lib/agreement.ts`). Both are followed by the standard terms.
 - **Download PDF** opens the browser's print dialog with a print layout showing only the agreement; choose "Save as PDF".
 

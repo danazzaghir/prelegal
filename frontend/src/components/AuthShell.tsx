@@ -4,12 +4,9 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import Wordmark from "@/components/Wordmark";
 import { fetchUser } from "@/lib/auth";
-import catalog from "../../../catalog.json";
+import { DOCUMENT_CHOICES } from "@/lib/documents";
 
-// The agreements users can draft; the NDA cover page is part of the NDA.
-const AGREEMENTS = catalog.templates
-  .map((t) => t.name)
-  .filter((name) => name !== "Mutual Non-Disclosure Agreement Cover Page");
+const AGREEMENTS = DOCUMENT_CHOICES.map((d) => d.name);
 
 /** The sign-in and sign-up screens: what Prelegal drafts on one side, the form on the other. */
 export default function AuthShell({ title, children }: { title: string; children: React.ReactNode }) {

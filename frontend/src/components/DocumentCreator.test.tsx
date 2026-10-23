@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ADA, chatRequests, fakeApi, fakeServer, requestsTo, savedAgreement, type TurnChanges } from "@/test-utils/fakeBackend";
@@ -319,7 +319,7 @@ describe("DocumentCreator", () => {
       );
       await say(user, "An SLA", "Reply 1");
       await coverPage(preview, "Service Level Agreement");
-      expect(await screen.findByText(/Not saved\. It will try again after your next message\./)).toBeInTheDocument();
+      expect(await screen.findByText(/Not saved\. It will try again after your next change\./)).toBeInTheDocument();
     });
   });
 
@@ -347,6 +347,193 @@ describe("DocumentCreator", () => {
       fakeServer({ user: ADA, agreements: [] });
       render(<DocumentCreator savedId={99} onCreated={vi.fn()} />);
       expect(await screen.findByRole("alert")).toHaveTextContent("Agreement not found.");
+    });
+  });
+
+  describe("filling it in by hand", () => {
+    // Manual edits are saved after a short pause, so allow for it.
+    const SAVE_WAIT = { timeout: 3000 };
+
+    async function manual(user: User) {
+      await user.click(screen.getByRole("button", { name: "Edit manually" }));
+      return screen.getByRole("region", { name: "Fill in the agreement yourself" });
+    }
+
+    async function choose(user: User, form: HTMLElement, name: string) {
+      await user.selectOptions(within(form).getByLabelText("Agreement type"), name);
+    }
+
+    it("switches between the chat and the form", async () => {
+      const { user } = await setup();
+      expect(screen.getByRole("button", { name: "Chat" })).toHaveAttribute("aria-pressed", "true");
+      const form = await manual(user);
+      expect(screen.getByRole("button", { name: "Edit manually" })).toHaveAttribute("aria-pressed", "true");
+      expect(within(form).getByLabelText("Agreement type")).toHaveValue("");
+      expect(screen.getByLabelText("Message")).not.toBeVisible();
+
+      await user.click(screen.getByRole("button", { name: "Chat" }));
+      expect(screen.queryByRole("region", { name: "Fill in the agreement yourself" })).not.toBeInTheDocument();
+      expect(screen.getByLabelText("Message")).toBeVisible();
+    });
+
+    it("lists every agreement in the catalog", async () => {
+      const { user } = await setup();
+      const form = await manual(user);
+      const options = within(within(form).getByLabelText("Agreement type")).getAllByRole("option");
+      // The placeholder plus the 11 documents.
+      expect(options).toHaveLength(12);
+      expect(options.map((o) => o.textContent)).toContain("Pilot Agreement");
+    });
+
+    it("offers the form when the AI is out of credit", async () => {
+      const { user } = await setup();
+      fakeApi({ status: 503, detail: "The AI assistant is unavailable: the OpenRouter account is out of credit." });
+      await user.type(screen.getByLabelText("Message"), "An SLA{Enter}");
+      await user.click(await screen.findByRole("button", { name: "Fill it in yourself" }));
+      expect(screen.getByRole("region", { name: "Fill in the agreement yourself" })).toBeInTheDocument();
+    });
+
+    it("chooses a document and fills in parties and key terms, shown in the agreement", async () => {
+      const { user, preview } = await setup();
+      const form = await manual(user);
+      await choose(user, form, "Pilot Agreement");
+      await coverPage(preview, "Pilot Agreement");
+
+      const customer = within(form).getByRole("group", { name: "Customer" });
+      await user.type(within(customer).getByLabelText("Company"), "Analytical Ltd");
+      await user.type(within(customer).getByLabelText("Signer's name"), "Ada Lovelace");
+      const provider = within(form).getByRole("group", { name: "Provider" });
+      await user.type(within(provider).getByLabelText("Company"), "Enigma Inc");
+      await user.type(within(form).getByLabelText("Pilot Period"), "90 days");
+
+      expect(row(preview, "Pilot Period")).toEqual(["Pilot Period", "90 days"]);
+      expect(row(preview, "Company")).toEqual(["Company", "Analytical Ltd", "Enigma Inc"]);
+      expect(row(preview, "Print Name")).toEqual(["Print Name", "Ada Lovelace", ""]);
+      // Effective dates still default to today.
+      expect(within(form).getByLabelText("Effective Date")).toHaveValue("2026-10-16");
+      expect(screen.getByRole("button", { name: "Download PDF" })).toBeEnabled();
+    });
+
+    it("can clear a key term again", async () => {
+      const { user, preview } = await setup();
+      const form = await manual(user);
+      await choose(user, form, "Pilot Agreement");
+      await coverPage(preview, "Pilot Agreement");
+      const field = within(form).getByLabelText("Pilot Period");
+      await user.type(field, "90 days");
+      await user.clear(field);
+      expect(row(preview, "Pilot Period")[1]).toBe("________________");
+    });
+
+    it("fills in the Mutual NDA's own fields", async () => {
+      const { user, preview } = await setup();
+      const form = await manual(user);
+      await choose(user, form, "Mutual Non-Disclosure Agreement");
+      await coverPage(preview, "Mutual Non-Disclosure Agreement");
+
+      await user.type(within(form).getByLabelText("Governing law"), "Delaware");
+      await user.type(within(form).getByLabelText("Jurisdiction"), "New Castle, DE");
+      await user.click(within(form).getByRole("radio", { name: "Continues until terminated" }));
+      const years = within(form).getByLabelText("Term of confidentiality in years");
+      await user.clear(years);
+      await user.type(years, "3");
+      // Date inputs take a whole value; typing one character at a time doesn't work in jsdom.
+      fireEvent.change(within(form).getByLabelText("Effective date"), { target: { value: "2026-11-01" } });
+      await user.type(within(within(form).getByRole("group", { name: "Party 1" })).getByLabelText("Signer's name"), "Ada");
+
+      expect(within(preview).getByText("Governing Law: Delaware")).toBeInTheDocument();
+      expect(within(preview).getByText("Jurisdiction: New Castle, DE")).toBeInTheDocument();
+      expect(sectionText(preview, "MNDA Term")).toBe("Continues until terminated in accordance with the terms of the MNDA.");
+      expect(sectionText(preview, "Term of Confidentiality")).toMatch(/^3 years from Effective Date/);
+      expect(sectionText(preview, "Effective Date")).toBe("November 1, 2026");
+      expect(row(preview, "Print Name")).toEqual(["Print Name", "Ada", ""]);
+    });
+
+    it("saves shortly after editing stops, not on every keystroke, then updates the same agreement", async () => {
+      const { user, preview, onCreated } = await setup();
+      const fetchMock = fakeApi();
+      const form = await manual(user);
+      await choose(user, form, "Service Level Agreement");
+      await coverPage(preview, "Service Level Agreement");
+      await user.type(within(form).getByLabelText("Target Uptime"), "99.9%");
+
+      await waitFor(() => expect(requestsTo(fetchMock, "/api/agreements")).toHaveLength(1), SAVE_WAIT);
+      const [created] = requestsTo(fetchMock, "/api/agreements");
+      expect(created.draft).toMatchObject({ documentId: "sla", terms: { "Target Uptime": "99.9%" } });
+      expect(created.messages).toEqual([{ role: "assistant", content: expect.stringMatching(/What kind of agreement/) }]);
+      expect(onCreated).toHaveBeenCalledWith(1);
+      expect(await screen.findByText("Saved")).toBeInTheDocument();
+
+      await user.type(within(form).getByLabelText("Support Channel"), "Email");
+      await waitFor(() => expect(requestsTo(fetchMock, "/api/agreements/1", "PUT")).toHaveLength(1), SAVE_WAIT);
+      expect(requestsTo(fetchMock, "/api/agreements/1", "PUT")[0].draft.terms).toEqual({
+        "Target Uptime": "99.9%",
+        "Support Channel": "Email",
+      });
+      expect(requestsTo(fetchMock, "/api/agreements")).toHaveLength(1);
+    });
+
+    it("saves a waiting edit at once when leaving the page", async () => {
+      fakeApi();
+      const user = userEvent.setup();
+      const { unmount } = render(<DocumentCreator savedId={null} onCreated={vi.fn()} />);
+      await screen.findByLabelText("Message");
+      const fetchMock = fakeApi();
+      const form = await manual(user);
+      await choose(user, form, "Service Level Agreement");
+      await user.type(await within(form).findByLabelText("Target Uptime"), "99%");
+      unmount();
+      await waitFor(() => expect(requestsTo(fetchMock, "/api/agreements")).toHaveLength(1));
+      expect(requestsTo(fetchMock, "/api/agreements")[0].draft.terms).toEqual({ "Target Uptime": "99%" });
+    });
+
+    it("asks before switching document once details are filled in", async () => {
+      const { user, preview } = await setup();
+      const form = await manual(user);
+      await choose(user, form, "Service Level Agreement");
+      await user.type(await within(form).findByLabelText("Target Uptime"), "99.9%");
+
+      const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false);
+      await choose(user, form, "Pilot Agreement");
+      expect(confirm).toHaveBeenCalledWith("Switch to the Pilot Agreement? The details filled in so far will be cleared.");
+      expect(within(form).getByLabelText("Agreement type")).toHaveValue("sla");
+      expect(row(preview, "Target Uptime")).toEqual(["Target Uptime", "99.9%"]);
+
+      confirm.mockReturnValueOnce(true);
+      await choose(user, form, "Pilot Agreement");
+      await coverPage(preview, "Pilot Agreement");
+      expect(within(form).getByLabelText("Pilot Period")).toHaveValue("");
+      confirm.mockRestore();
+    });
+
+    it("doesn't ask when nothing has been filled in", async () => {
+      const { user, preview } = await setup();
+      const form = await manual(user);
+      const confirm = vi.spyOn(window, "confirm");
+      await choose(user, form, "Service Level Agreement");
+      await coverPage(preview, "Service Level Agreement");
+      await choose(user, form, "Pilot Agreement");
+      await coverPage(preview, "Pilot Agreement");
+      expect(confirm).not.toHaveBeenCalled();
+      confirm.mockRestore();
+    });
+
+    it("shows what the AI filled in, and the AI sees manual edits when it is back", async () => {
+      const { user, preview } = await setup();
+      await chat(user, { documentId: "sla", terms: { "Target Uptime": "99.9%" } });
+      await coverPage(preview, "Service Level Agreement");
+
+      const form = await manual(user);
+      expect(within(form).getByLabelText("Agreement type")).toHaveValue("sla");
+      expect(within(form).getByLabelText("Target Uptime")).toHaveValue("99.9%");
+      await user.type(within(form).getByLabelText("Support Channel"), "Email");
+
+      await user.click(screen.getByRole("button", { name: "Chat" }));
+      // The conversation is still there.
+      expect(screen.getByText("Reply 1")).toBeInTheDocument();
+      const fetchMock = fakeApi({ reply: "Thanks" });
+      await say(user, "Anything else?", "Thanks");
+      expect(chatRequests(fetchMock)[0].draft.terms).toEqual({ "Target Uptime": "99.9%", "Support Channel": "Email" });
     });
   });
 });

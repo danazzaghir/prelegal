@@ -105,10 +105,40 @@ test.describe("Document creator", () => {
     );
     await page.getByLabel("Message").fill("I need an NDA");
     await page.getByRole("button", { name: "Send" }).click();
-    await expect(chatError(page)).toHaveText("The AI assistant didn't respond. Please try again.");
+    await expect(chatError(page)).toContainText("The AI assistant didn't respond. Please try again.");
     await expect(page.getByLabel("Message")).toHaveValue("I need an NDA");
     // The browser logs the failed request itself; that is expected here.
     consoleErrors = consoleErrors.filter((e) => !e.includes("status of 502"));
+  });
+
+  test("fills in the agreement by hand when the AI is out of credit, and saves it", async ({ page }) => {
+    await page.route("/api/chat", (route) =>
+      route.fulfill({
+        status: 503,
+        json: { detail: "The AI assistant is unavailable: the OpenRouter account is out of credit." },
+      }),
+    );
+    await page.getByLabel("Message").fill("I need a pilot agreement");
+    await page.getByLabel("Message").press("Enter");
+    await chatError(page).getByRole("button", { name: "Fill it in yourself" }).click();
+
+    const form = page.getByRole("region", { name: "Fill in the agreement yourself" });
+    await form.getByLabel("Agreement type").selectOption({ label: "Pilot Agreement" });
+    await expect(preview(page).getByRole("heading", { level: 1, name: "Pilot Agreement" })).toBeVisible();
+    await form.getByRole("group", { name: "Customer" }).getByLabel("Company").fill("Analytical Ltd");
+    await form.getByRole("group", { name: "Provider" }).getByLabel("Company").fill("Enigma Inc");
+    await form.getByLabel("Pilot Period").fill("90 days");
+    await expect(tableRow(page, "Pilot Period")).toContainText("90 days");
+
+    // Auto-saved, with the new agreement's id put in the address.
+    await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
+    await expect(page).toHaveURL(/\/documents\/\?id=\d+$/);
+
+    await page.reload();
+    await expect(tableRow(page, "Pilot Period")).toContainText("90 days");
+    await expect(tableRow(page, "Company")).toContainText("Analytical Ltd");
+    await expect(tableRow(page, "Company")).toContainText("Enigma Inc");
+    consoleErrors = consoleErrors.filter((e) => !e.includes("status of 503"));
   });
 
   test("print layout shows only the agreement", async ({ page }) => {
